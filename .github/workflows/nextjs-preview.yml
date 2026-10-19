@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       command:
-        description: Operation to perform: deploy or destroy.
+        description: "Operation to perform: deploy or destroy."
         required: true
         type: string
       platform-ref:
