@@ -1,0 +1,307 @@
+name: Next.js preview environment
+
+on:
+  workflow_call:
+    inputs:
+      config-path:
+        description: Path to nextjs-app.yml in the caller repository.
+        required: true
+        type: string
+      command:
+        description: Operation to perform: deploy or destroy.
+        required: true
+        type: string
+      platform-ref:
+        description: Git ref of this platform repository.
+        required: false
+        type: string
+        default: v1
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: preview-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout actions platform
+        uses: actions/checkout@v4
+        with:
+          repository: on-the-edge-cloud/github-actions-nextjs
+          ref: ${{ inputs.platform-ref }}
+          path: .platform
+
+      - name: Read application configuration
+        id: config
+        uses: ./.platform/actions/read-config
+        with:
+          config-path: ${{ inputs.config-path }}
+          command: ${{ inputs.command }}
+
+      - name: Checkout Terraform module version
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        uses: actions/checkout@v4
+        with:
+          repository: on-the-edge-cloud/terraform-aws-nextjs
+          ref: ${{ steps.config.outputs.terraform-module-version }}
+          path: .terraform-modules
+
+      - name: Report preview context
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        shell: bash
+        env:
+          APP_SLUG: ${{ steps.config.outputs.app-slug }}
+          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
+          DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
+          AWS_REGION: ${{ steps.config.outputs.aws-region }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
+            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-pr-${PR_NUMBER}"
+          elif [[ -z "$WORKSPACE_PREFIX" ]]; then
+            workspace="pr-${PR_NUMBER}"
+          else
+            workspace="${WORKSPACE_PREFIX}-pr-${PR_NUMBER}"
+          fi
+
+          echo "::notice title=Preview workflow::${inputs.command} for ${APP_SLUG}, PR ${PR_NUMBER}, workspace ${workspace}"
+          {
+            echo "### Preview workflow"
+            printf -- '- App: `%s`\n' "$APP_SLUG"
+            printf -- '- PR: #%s\n' "$PR_NUMBER"
+            printf -- '- Region: `%s`\n' "$AWS_REGION"
+            printf -- '- Workspace: `%s`\n' "$workspace"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node.js
+        if: inputs.command == 'deploy'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.config.outputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ steps.config.outputs.app-directory }}/package-lock.json
+
+      - name: Install dependencies
+        if: inputs.command == 'deploy'
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          INSTALL_COMMAND: ${{ steps.config.outputs.install-command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Lint
+        if: inputs.command == 'deploy' && steps.config.outputs.lint-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          LINT_COMMAND: ${{ steps.config.outputs.lint-command }}
+        run: bash -euo pipefail -c "$LINT_COMMAND"
+
+      - name: Test application
+        if: inputs.command == 'deploy' && steps.config.outputs.test-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          TEST_COMMAND: ${{ steps.config.outputs.test-command }}
+        run: bash -euo pipefail -c "$TEST_COMMAND"
+
+      - name: Build Next.js
+        if: inputs.command == 'deploy' && steps.config.outputs.build-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          BUILD_COMMAND: ${{ steps.config.outputs.build-command }}
+        run: bash -euo pipefail -c "$BUILD_COMMAND"
+
+      - name: Build OpenNext
+        if: inputs.command == 'deploy'
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          OPENNEXT_BUILD_COMMAND: ${{ steps.config.outputs.opennext-build-command }}
+        run: |
+          echo "::notice title=OpenNext build::Starting build."
+          bash -euo pipefail -c "$OPENNEXT_BUILD_COMMAND"
+          echo "::notice title=OpenNext build::Build completed."
+
+      - name: Configure AWS credentials
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ steps.config.outputs.aws-region }}
+
+      - name: Setup Terraform
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Prepare Terraform variables
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        shell: bash
+        env:
+          APP_DIRECTORY: ${{ steps.config.outputs.app-directory }}
+          APP_SLUG: ${{ steps.config.outputs.app-slug }}
+          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
+          DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
+          AWS_REGION: ${{ steps.config.outputs.aws-region }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
+
+          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
+            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-pr-${PR_NUMBER}"
+          elif [[ -z "$WORKSPACE_PREFIX" ]]; then
+            workspace="pr-${PR_NUMBER}"
+          else
+            workspace="${WORKSPACE_PREFIX}-pr-${PR_NUMBER}"
+          fi
+
+          {
+            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${DEPLOYMENT_TYPE}"
+            echo "TF_IN_AUTOMATION=true"
+            echo "TF_INPUT=false"
+            echo "TF_VAR_app_slug=$APP_SLUG"
+            echo "TF_VAR_aws_region=$AWS_REGION"
+            echo "TF_VAR_pr_number=$PR_NUMBER"
+            echo "TF_VAR_app_directory=$app_root"
+            echo "PREVIEW_WORKSPACE=$workspace"
+          } >> "$GITHUB_ENV"
+
+          echo "::notice title=Terraform configuration::Root: terraform/${DEPLOYMENT_TYPE}; workspace: ${workspace}"
+
+      - name: Format Terraform
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        run: terraform -chdir="$TERRAFORM_ROOT" fmt -check -recursive
+
+      - name: Initialize Terraform without backend
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        run: terraform -chdir="$TERRAFORM_ROOT" init -backend=false -input=false
+
+      - name: Validate Terraform
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        run: terraform -chdir="$TERRAFORM_ROOT" validate
+
+      - name: Initialize Terraform backend
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        run: terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false
+
+      - name: Select or create preview workspace
+        id: workspace
+        if: inputs.command == 'deploy' || inputs.command == 'destroy'
+        shell: bash
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: |
+          set -euo pipefail
+          if [[ "$COMMAND" == "deploy" ]]; then
+            terraform -chdir="$TERRAFORM_ROOT" workspace select "$PREVIEW_WORKSPACE" \
+              || terraform -chdir="$TERRAFORM_ROOT" workspace new "$PREVIEW_WORKSPACE"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif terraform -chdir="$TERRAFORM_ROOT" workspace select "$PREVIEW_WORKSPACE"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Plan preview
+        if: inputs.command == 'deploy'
+        run: terraform -chdir="$TERRAFORM_ROOT" plan -out="$RUNNER_TEMP/preview.tfplan"
+
+      - name: Deploy preview
+        if: inputs.command == 'deploy'
+        run: terraform -chdir="$TERRAFORM_ROOT" apply "$RUNNER_TEMP/preview.tfplan"
+
+      - name: Read preview URL
+        id: preview
+        if: inputs.command == 'deploy'
+        shell: bash
+        run: |
+          preview_url=$(terraform -chdir="$TERRAFORM_ROOT" output -raw preview_url)
+          distribution_id=$(terraform -chdir="$TERRAFORM_ROOT" output -raw cloudfront_distribution_id)
+          echo "preview-url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "distribution-id=$distribution_id" >> "$GITHUB_OUTPUT"
+          echo "### Preview deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $preview_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create CloudFront invalidation
+        id: invalidation
+        if: inputs.command == 'deploy'
+        env:
+          DISTRIBUTION_ID: ${{ steps.preview.outputs.distribution-id }}
+        run: |
+          id=$(aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for CloudFront invalidation
+        if: inputs.command == 'deploy'
+        env:
+          DISTRIBUTION_ID: ${{ steps.preview.outputs.distribution-id }}
+          INVALIDATION_ID: ${{ steps.invalidation.outputs.id }}
+        run: aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
+
+      - name: Smoke test preview
+        if: inputs.command == 'deploy' && steps.config.outputs.smoke-test-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.preview-url }}
+          SMOKE_TEST_COMMAND: ${{ steps.config.outputs.smoke-test-command }}
+        run: bash -euo pipefail -c "$SMOKE_TEST_COMMAND"
+
+      - name: Comment preview URL
+        if: inputs.command == 'deploy'
+        uses: actions/github-script@v7
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.preview-url }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const body = `Preview listo: ${process.env.PREVIEW_URL}`;
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.data.find(comment =>
+              comment.user.type === 'Bot' && comment.body.startsWith('Preview listo: https://')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Destroy preview
+        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
+        run: terraform -chdir="$TERRAFORM_ROOT" destroy -auto-approve -var="deploy_artifacts=false"
+
+      - name: Select default workspace
+        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
+        run: terraform -chdir="$TERRAFORM_ROOT" workspace select default
+
+      - name: Delete preview workspace
+        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
+        run: terraform -chdir="$TERRAFORM_ROOT" workspace delete "$PREVIEW_WORKSPACE"
+
+      - name: Report missing workspace
+        if: inputs.command == 'destroy' && steps.workspace.outputs.exists != 'true'
+        run: echo "No preview workspace exists; nothing to destroy."
