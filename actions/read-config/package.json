@@ -1,0 +1,16 @@
+{
+  "name": "@on-the-edge-cloud/nextjs-config-reader",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tsx": "4.20.6",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "typescript": "5.8.3"
+  }
+}

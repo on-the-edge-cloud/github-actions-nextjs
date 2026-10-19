@@ -1,0 +1,73 @@
+name: Read application configuration
+description: Validates nextjs-app.yml and exposes app settings as action outputs.
+
+inputs:
+  config-path:
+    description: Path to nextjs-app.yml inside the checked-out app.
+    required: true
+  command:
+    description: Preview operation, either deploy or destroy.
+    required: true
+
+outputs:
+  app-directory:
+    description: Application directory relative to the repository root.
+    value: ${{ steps.config.outputs.app-directory }}
+  app-slug:
+    description: Unique lowercase identifier for this application.
+    value: ${{ steps.config.outputs.app-slug }}
+  workspace-prefix:
+    description: Optional prefix for Terraform preview workspace names.
+    value: ${{ steps.config.outputs.workspace-prefix }}
+  node-version:
+    description: Node.js version used by the build.
+    value: ${{ steps.config.outputs.node-version }}
+  install-command:
+    description: Dependency installation command.
+    value: ${{ steps.config.outputs.install-command }}
+  lint-command:
+    description: Lint command.
+    value: ${{ steps.config.outputs.lint-command }}
+  test-command:
+    description: Optional test command.
+    value: ${{ steps.config.outputs.test-command }}
+  build-command:
+    description: Optional Next.js build command.
+    value: ${{ steps.config.outputs.build-command }}
+  opennext-build-command:
+    description: OpenNext build command.
+    value: ${{ steps.config.outputs.opennext-build-command }}
+  smoke-test-command:
+    description: Optional smoke test command; PREVIEW_URL is available.
+    value: ${{ steps.config.outputs.smoke-test-command }}
+  aws-region:
+    description: AWS region for preview resources.
+    value: ${{ steps.config.outputs.aws-region }}
+  terraform-module-version:
+    description: Version tag of the Terraform module repository.
+    value: ${{ steps.config.outputs.terraform-module-version }}
+  deployment-type:
+    description: Application hosting mode, static or ssr.
+    value: ${{ steps.config.outputs.deployment-type }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install config reader dependencies
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: npm ci --prefix "$ACTION_PATH"
+
+    - id: config
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CONFIG_PATH: ${{ inputs.config-path }}
+        COMMAND: ${{ inputs.command }}
+      run: |
+        "$ACTION_PATH/node_modules/.bin/tsx" "$ACTION_PATH/read-config.ts" "$CONFIG_PATH" "$COMMAND"
