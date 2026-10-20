@@ -8,5 +8,5 @@ app:
   lint-command: "npm run lint"
   test-command: "npm test"
   build-command: ""
-  opennext-build-command: "npm run opennext:build"
+  opennext-build-command: ""
   smoke-test-command: ""

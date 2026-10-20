@@ -93,7 +93,7 @@ jobs:
 
       - name: Build OpenNext
         if: inputs.command == 'deploy'
-        uses: ./.platform/actions/run-command
+        uses: ./.platform/actions/build-opennext
         with:
           working-directory: ${{ steps.config.outputs.app-directory }}
           command: ${{ steps.config.outputs.opennext-build-command }}

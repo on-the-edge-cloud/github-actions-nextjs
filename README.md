@@ -54,6 +54,8 @@ Use the [complete example](examples/nextjs-app.yml) for all supported overrides 
 
 Smoke tests run automatically after CloudFront invalidation. By default, SSR apps must expose `/ssr/`, `/api/health/`, and `/isr/` with timestamps and the expected cache headers; static apps are checked for HTTP 200 at `/`. Set `app.smoke-test-command` to override these checks, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL. Omit it or leave it empty to use the defaults.
 
+OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. The default supports Next.js `>=15.5.28 <16 || >=16.4.1`. To customize it, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build entirely. Omit it or leave it empty to use the defaults.
+
 ## Terraform state
 
 State is isolated by repository, hosting mode, and PR or production. The AWS role needs access to the S3 state and lock files. Existing infrastructure requires state migration before deploy or destroy; migration is not automatic. Back up the old state, reconcile resource addresses with the new module, and review the plan before applying.
@@ -64,7 +66,7 @@ The workflow skips fork pull requests. App commands are executed from the PR che
 
 ## Shared actions
 
-TypeScript actions in `actions/` handle application commands, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, smoke tests, and preview comments.
+TypeScript actions in `actions/` handle application commands, OpenNext builds, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, smoke tests, and preview comments.
 
 ```bash
 npm ci --prefix actions

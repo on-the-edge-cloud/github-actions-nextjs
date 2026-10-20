@@ -8,6 +8,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { parseDocument, stringify } from "yaml";
+import { resolveOpenNext } from "./build-opennext/build-opennext.js";
+import openNextConfig from "./build-opennext/open-next.config.js";
 
 const actionsRoot = dirname(fileURLToPath(import.meta.url));
 
@@ -64,7 +66,7 @@ for (const command of ["deploy", "destroy"]) {
       "lint-command": "npm run lint",
       "test-command": "",
       "build-command": "",
-      "opennext-build-command": "npm run opennext:build",
+      "opennext-build-command": "",
       "smoke-test-command": "",
       "aws-region": "eu-north-1",
       "deployment-type": "ssr",
@@ -91,9 +93,9 @@ for (const [name, app, command, message] of [
   }));
 }
 
-test("read config preserves the smoke test override", () => fixture(workspace => {
+test("read config preserves build and smoke test overrides", () => fixture(workspace => {
   writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
-    app: { directory: "app", "aws-region": "eu-north-1", "smoke-test-command": "npm run smoke" },
+    app: { directory: "app", "aws-region": "eu-north-1", "smoke-test-command": "npm run smoke", "opennext-build-command": "npm run custom:build" },
   }));
   const result = execute("read-config", {
     GITHUB_WORKSPACE: workspace,
@@ -104,6 +106,7 @@ test("read config preserves the smoke test override", () => fixture(workspace =>
   });
   assert.equal(result.status, 0, result.stderr);
   assert(readFileSync(join(workspace, "outputs"), "utf8").includes("smoke-test-command=npm run smoke\n"));
+  assert(readFileSync(join(workspace, "outputs"), "utf8").includes("opennext-build-command=npm run custom:build\n"));
 }));
 
 for (const filename of ["nextjs-app.yml", "nextjs-app-minimal.yml"]) {
@@ -136,7 +139,7 @@ for (const filename of ["nextjs-app.yml", "nextjs-app-minimal.yml"]) {
         "lint-command": "npm run lint",
         "test-command": filename === "nextjs-app.yml" ? "npm test" : "",
         "build-command": "",
-        "opennext-build-command": "npm run opennext:build",
+        "opennext-build-command": "",
         "smoke-test-command": "",
       });
       if (filename === "nextjs-app.yml") {
@@ -211,6 +214,78 @@ for (const mode of ["ssr", "static"]) {
     }
   }
 }
+
+test("OpenNext uses the platform package and configuration by default", () => fixture(workspace => {
+  const build = resolveOpenNext(join(workspace, "app"));
+  assert.equal(build.config, resolve(actionsRoot, "build-opennext/open-next.config.ts"));
+  assert(build.cli.startsWith(resolve(actionsRoot, "node_modules/@opennextjs/aws")));
+  assert.deepEqual(openNextConfig, {
+    default: {},
+    imageOptimization: {
+      install: { packages: ["sharp@0.35.5"], arch: "x64", os: "linux", libc: "glibc", nodeVersion: "22" },
+    },
+  });
+}));
+
+for (const customConfig of [false, true]) {
+  for (const entrypoint of ["exports", "main"]) {
+    test(`OpenNext uses the client's ${entrypoint} package ${customConfig ? "and config" : "with platform config"}`, () => fixture(workspace => {
+      const directory = join(workspace, "app");
+      const packageDirectory = join(directory, "node_modules/@opennextjs/aws");
+      mkdirSync(packageDirectory, { recursive: true });
+      writeFileSync(join(directory, "package.json"), "{}");
+      writeFileSync(join(packageDirectory, "package.json"), JSON.stringify({
+        name: "@opennextjs/aws",
+        ...(entrypoint === "exports" ? { exports: { "./index.js": "./cli.cjs" } } : { main: "./cli.cjs" }),
+      }));
+      writeFileSync(join(packageDirectory, "cli.cjs"), 'process.stdout.write(JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));');
+      if (customConfig) writeFileSync(join(directory, "open-next.config.ts"), "export default { default: {} };");
+      const result = execute("build-opennext", {
+        GITHUB_WORKSPACE: workspace,
+        WORKING_DIRECTORY: "app",
+        OPENNEXT_BUILD_COMMAND: "",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const output = JSON.parse(result.stdout) as { cwd: string; args: string[] };
+      assert.equal(output.cwd, directory);
+      assert.deepEqual(output.args.slice(0, 2), ["build", "--config-path"]);
+      assert.equal(resolve(directory, output.args[2]), customConfig
+        ? join(directory, "open-next.config.ts")
+        : resolve(actionsRoot, "build-opennext/open-next.config.ts"));
+    }));
+  }
+}
+
+test("OpenNext custom config requires a client dependency", () => fixture(workspace => {
+  writeFileSync(join(workspace, "app/open-next.config.ts"), "export default { default: {} };");
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: "",
+  });
+  assert.notEqual(result.status, 0);
+  assert(result.stderr.includes("requires @opennextjs/aws installed in the application"));
+}));
+
+test("OpenNext command override replaces the managed build", () => fixture(workspace => {
+  writeFileSync(join(workspace, "app/open-next.config.ts"), "invalid custom configuration");
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: 'printf "%s" "$PWD"',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, join(workspace, "app"));
+}));
+
+test("OpenNext propagates override failures", () => fixture(workspace => {
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: "false | true",
+  });
+  assert.notEqual(result.status, 0);
+}));
 
 for (const repository of ["owner/app-one", "owner/app-two"]) {
   for (const mode of ["ssr", "static"]) {
@@ -493,6 +568,10 @@ test("workflow callers match local action inputs and outputs", () => {
     assert.deepEqual(document.errors, []);
     const workflow = document.toJS();
     const steps = workflow.jobs[kind].steps;
+    const build = steps.find((step: { name: string }) => step.name === "Build OpenNext");
+    assert.equal(build.uses, "./.platform/actions/build-opennext");
+    assert.equal(build.with.command, "${{ steps.config.outputs.opennext-build-command }}");
+    assert.equal(build.with["working-directory"], "${{ steps.config.outputs.app-directory }}");
     const smoke = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/smoke-test");
     assert(smoke, `${kind} must run the platform smoke test`);
     assert.equal(smoke.with.url, `\${{ steps.${kind}.outputs.url }}`);
@@ -532,7 +611,7 @@ test("workflow callers match local action inputs and outputs", () => {
       const destroy = steps.find((step: { name: string }) => step.name === "Destroy preview");
       assert.equal(destroy.if, "inputs.command == 'destroy'");
       assert(destroy.run.includes('deploy_artifacts=false'));
-      for (const step of steps.filter((step: { uses?: string }) => ["run-command", "deployment-outputs", "invalidate-cloudfront", "smoke-test", "comment-preview"].some(action => step.uses === `./.platform/actions/${action}`))) {
+      for (const step of steps.filter((step: { uses?: string }) => ["run-command", "build-opennext", "deployment-outputs", "invalidate-cloudfront", "smoke-test", "comment-preview"].some(action => step.uses === `./.platform/actions/${action}`))) {
         assert(step.if.includes("inputs.command == 'deploy'"), `${step.name} must not run during destroy`);
       }
     }

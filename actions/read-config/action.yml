@@ -32,7 +32,7 @@ outputs:
     description: Optional Next.js build command.
     value: ${{ steps.config.outputs.build-command }}
   opennext-build-command:
-    description: OpenNext build command.
+    description: Optional override for the platform OpenNext build.
     value: ${{ steps.config.outputs.opennext-build-command }}
   smoke-test-command:
     description: Optional override for the platform smoke test.

@@ -84,7 +84,7 @@ const outputs: Record<string, string> = {
   "lint-command": config.app["lint-command"] ?? "npm run lint",
   "test-command": config.app["test-command"] ?? "",
   "build-command": config.app["build-command"] ?? "",
-  "opennext-build-command": config.app["opennext-build-command"] ?? "npm run opennext:build",
+  "opennext-build-command": config.app["opennext-build-command"] ?? "",
   "smoke-test-command": config.app["smoke-test-command"] ?? "",
   "aws-region": region,
   "deployment-type": deploymentType,

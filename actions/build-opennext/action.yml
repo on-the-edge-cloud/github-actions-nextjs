@@ -1,0 +1,19 @@
+name: Build OpenNext
+description: Build the application.
+
+inputs:
+  working-directory:
+    description: Application directory relative to the caller checkout.
+    default: .
+  command:
+    description: Optional command replacing the managed OpenNext build.
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        OPENNEXT_BUILD_COMMAND: ${{ inputs.command }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/build-opennext.ts"

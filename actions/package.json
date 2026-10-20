@@ -8,11 +8,17 @@
   },
   "dependencies": {
     "@actions/github": "9.1.1",
+    "@opennextjs/aws": "4.1.11",
     "tsx": "4.20.6",
     "yaml": "2.9.1"
   },
   "devDependencies": {
     "@types/node": "22.15.30",
     "typescript": "5.8.3"
+  },
+  "overrides": {
+    "@node-minify/core": {
+      "glob": "10.5.0"
+    }
   }
 }
