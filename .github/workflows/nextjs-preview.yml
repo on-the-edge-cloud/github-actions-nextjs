@@ -55,25 +55,6 @@ jobs:
           ref: v1.4
           path: .terraform-modules
 
-      - name: Report preview context
-        if: inputs.command == 'deploy' || inputs.command == 'destroy'
-        shell: bash
-        env:
-          COMMAND: ${{ inputs.command }}
-          APP_SLUG: ${{ steps.config.outputs.app-slug }}
-          DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
-          AWS_REGION: ${{ steps.config.outputs.aws-region }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          echo "::notice title=Preview workflow::${COMMAND} for ${APP_SLUG}, PR ${PR_NUMBER}, mode ${DEPLOYMENT_TYPE}"
-          {
-            echo "### Preview workflow"
-            printf -- '- App: `%s`\n' "$APP_SLUG"
-            printf -- '- PR: #%s\n' "$PR_NUMBER"
-            printf -- '- Region: `%s`\n' "$AWS_REGION"
-            printf -- '- Deployment type: `%s`\n' "$DEPLOYMENT_TYPE"
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Setup Node.js
         if: inputs.command == 'deploy'
         uses: actions/setup-node@v4
@@ -84,46 +65,38 @@ jobs:
 
       - name: Install dependencies
         if: inputs.command == 'deploy'
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
-        env:
-          INSTALL_COMMAND: ${{ steps.config.outputs.install-command }}
-        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+        uses: ./.platform/actions/run-command
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.install-command }}
 
       - name: Lint
         if: inputs.command == 'deploy' && steps.config.outputs.lint-command != ''
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
-        env:
-          LINT_COMMAND: ${{ steps.config.outputs.lint-command }}
-        run: bash -euo pipefail -c "$LINT_COMMAND"
+        uses: ./.platform/actions/run-command
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.lint-command }}
 
       - name: Test application
         if: inputs.command == 'deploy' && steps.config.outputs.test-command != ''
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
-        env:
-          TEST_COMMAND: ${{ steps.config.outputs.test-command }}
-        run: bash -euo pipefail -c "$TEST_COMMAND"
+        uses: ./.platform/actions/run-command
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.test-command }}
 
       - name: Build Next.js
         if: inputs.command == 'deploy' && steps.config.outputs.build-command != ''
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
-        env:
-          BUILD_COMMAND: ${{ steps.config.outputs.build-command }}
-        run: bash -euo pipefail -c "$BUILD_COMMAND"
+        uses: ./.platform/actions/run-command
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.build-command }}
 
       - name: Build OpenNext
         if: inputs.command == 'deploy'
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
-        env:
-          OPENNEXT_BUILD_COMMAND: ${{ steps.config.outputs.opennext-build-command }}
-        run: |
-          echo "::notice title=OpenNext build::Starting build."
-          bash -euo pipefail -c "$OPENNEXT_BUILD_COMMAND"
-          echo "::notice title=OpenNext build::Build completed."
+        uses: ./.platform/actions/run-command
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.opennext-build-command }}
 
       - name: Configure AWS credentials
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
@@ -140,29 +113,14 @@ jobs:
 
       - name: Prepare Terraform variables
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
-        shell: bash
-        env:
-          APP_DIRECTORY: ${{ steps.config.outputs.app-directory }}
-          APP_SLUG: ${{ steps.config.outputs.app-slug }}
-          DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
-          AWS_REGION: ${{ steps.config.outputs.aws-region }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
-
-          {
-            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform"
-            echo "TF_IN_AUTOMATION=true"
-            echo "TF_INPUT=false"
-            echo "TF_VAR_app_slug=$APP_SLUG"
-            echo "TF_VAR_deployment_type=$DEPLOYMENT_TYPE"
-            echo "TF_VAR_aws_region=$AWS_REGION"
-            echo "TF_VAR_pr_number=$PR_NUMBER"
-            echo "TF_VAR_app_directory=$app_root"
-          } >> "$GITHUB_ENV"
-
-          echo "::notice title=Terraform configuration::Root: terraform; mode: ${DEPLOYMENT_TYPE}; PR: ${PR_NUMBER}"
+        uses: ./.platform/actions/prepare-terraform
+        with:
+          app-directory: ${{ steps.config.outputs.app-directory }}
+          app-slug: ${{ steps.config.outputs.app-slug }}
+          deployment-type: ${{ steps.config.outputs.deployment-type }}
+          aws-region: ${{ steps.config.outputs.aws-region }}
+          pr-number: ${{ github.event.pull_request.number }}
+          command: ${{ inputs.command }}
 
       - name: Format Terraform
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
@@ -178,12 +136,7 @@ jobs:
 
       - name: Initialize Terraform backend
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
-        run: |
-          terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false \
-            -backend-config="bucket=on-the-edge-terraform-state" \
-            -backend-config="key=nextjs/${GITHUB_REPOSITORY}/${TF_VAR_deployment_type}/${TF_VAR_pr_number:-production}.tfstate" \
-            -backend-config="region=eu-north-1" \
-            -backend-config="use_lockfile=true"
+        uses: ./.platform/actions/terraform-backend
 
       - name: Plan preview
         if: inputs.command == 'deploy'
@@ -196,64 +149,31 @@ jobs:
       - name: Read preview URL
         id: preview
         if: inputs.command == 'deploy'
-        shell: bash
-        run: |
-          preview_url=$(terraform -chdir="$TERRAFORM_ROOT" output -raw preview_url)
-          distribution_id=$(terraform -chdir="$TERRAFORM_ROOT" output -raw cloudfront_distribution_id)
-          echo "preview-url=$preview_url" >> "$GITHUB_OUTPUT"
-          echo "distribution-id=$distribution_id" >> "$GITHUB_OUTPUT"
-          echo "### Preview deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "- URL: $preview_url" >> "$GITHUB_STEP_SUMMARY"
+        uses: ./.platform/actions/deployment-outputs
+        with:
+          environment: preview
 
-      - name: Create CloudFront invalidation
-        id: invalidation
+      - name: Invalidate CloudFront
         if: inputs.command == 'deploy'
-        env:
-          DISTRIBUTION_ID: ${{ steps.preview.outputs.distribution-id }}
-        run: |
-          id=$(aws cloudfront create-invalidation \
-            --distribution-id "$DISTRIBUTION_ID" \
-            --paths '/*' \
-            --query 'Invalidation.Id' \
-            --output text)
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for CloudFront invalidation
-        if: inputs.command == 'deploy'
-        env:
-          DISTRIBUTION_ID: ${{ steps.preview.outputs.distribution-id }}
-          INVALIDATION_ID: ${{ steps.invalidation.outputs.id }}
-        run: aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
+        uses: ./.platform/actions/invalidate-cloudfront
+        with:
+          distribution-id: ${{ steps.preview.outputs.distribution-id }}
 
       - name: Smoke test preview
         if: inputs.command == 'deploy' && steps.config.outputs.smoke-test-command != ''
-        shell: bash
-        working-directory: ${{ steps.config.outputs.app-directory }}
+        uses: ./.platform/actions/run-command
         env:
-          PREVIEW_URL: ${{ steps.preview.outputs.preview-url }}
-          SMOKE_TEST_COMMAND: ${{ steps.config.outputs.smoke-test-command }}
-        run: bash -euo pipefail -c "$SMOKE_TEST_COMMAND"
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        with:
+          working-directory: ${{ steps.config.outputs.app-directory }}
+          command: ${{ steps.config.outputs.smoke-test-command }}
 
       - name: Comment preview URL
         if: inputs.command == 'deploy'
-        uses: actions/github-script@v7
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.preview-url }}
+        uses: ./.platform/actions/comment-preview
         with:
-          script: |
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const body = `Preview listo: ${process.env.PREVIEW_URL}`;
-            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
-            const existing = comments.data.find(comment =>
-              comment.user.type === 'Bot' && comment.body.startsWith('Preview listo: https://')
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+          url: ${{ steps.preview.outputs.url }}
+          pr-number: ${{ github.event.pull_request.number }}
 
       - name: Destroy preview
         if: inputs.command == 'destroy'

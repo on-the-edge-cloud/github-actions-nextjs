@@ -59,3 +59,13 @@ State is isolated by repository, hosting mode, and PR or production. The AWS rol
 ## Security
 
 The workflow skips fork pull requests. App commands are executed from the PR checkout and therefore only trusted contributors should be allowed to trigger the AWS deployment. The AWS role needs permissions to manage the preview resources and pass narrowly scoped Lambda roles.
+
+## Shared actions
+
+TypeScript actions in `actions/` handle application commands, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, and preview comments.
+
+```bash
+npm ci --prefix actions
+npm run check --prefix actions
+npm test --prefix actions
+```

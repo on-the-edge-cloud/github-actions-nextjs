@@ -1,11 +1,13 @@
 {
-  "name": "@on-the-edge-cloud/nextjs-config-reader",
+  "name": "@on-the-edge-cloud/nextjs-workflow-actions",
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "tsx --test deployment.test.ts"
   },
   "dependencies": {
+    "@actions/github": "9.1.1",
     "tsx": "4.20.6",
     "yaml": "2.9.1"
   },

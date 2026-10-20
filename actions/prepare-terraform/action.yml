@@ -1,0 +1,35 @@
+name: Prepare Terraform
+description: Prepare shared Terraform deployment variables.
+
+inputs:
+  app-directory:
+    description: Application directory relative to the caller checkout.
+    required: true
+  app-slug:
+    description: Application resource slug.
+    required: true
+  deployment-type:
+    description: Hosting mode, static or ssr.
+    required: true
+  aws-region:
+    description: Application AWS region.
+    required: true
+  pr-number:
+    description: PR number, empty for production.
+    default: ""
+  command:
+    description: Operation, deploy or destroy.
+    default: deploy
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        APP_DIRECTORY: ${{ inputs.app-directory }}
+        APP_SLUG: ${{ inputs.app-slug }}
+        DEPLOYMENT_TYPE: ${{ inputs.deployment-type }}
+        AWS_REGION: ${{ inputs.aws-region }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        COMMAND: ${{ inputs.command }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/prepare-terraform.ts"

@@ -1,8 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { parseDocument } from "yaml";
+import { writeValues } from "../lib.js";
 
 type AppConfig = {
   app: {
@@ -24,12 +23,11 @@ type AppConfig = {
 };
 
 const workspace = realpathSync(process.env.GITHUB_WORKSPACE ?? process.cwd());
-const actionPath = dirname(fileURLToPath(import.meta.url));
-const requestedConfigPath = process.argv[2];
-const command = process.argv[3];
+const requestedConfigPath = process.env.CONFIG_PATH;
+const command = process.env.COMMAND;
 
 if (!requestedConfigPath || !command) {
-  throw new Error("Usage: read-config.ts CONFIG_PATH deploy|destroy");
+  throw new Error("CONFIG_PATH and COMMAND are required.");
 }
 
 if (command !== "deploy" && command !== "destroy") {
@@ -41,12 +39,6 @@ const configRelativePath = relative(workspace, configPath);
 if (isAbsolute(configRelativePath) || configRelativePath === ".." || configRelativePath.startsWith(`..${sep}`)) {
   throw new Error("Configuration must be inside the checked-out repository.");
 }
-
-execFileSync(
-  resolve(actionPath, "node_modules/.bin/tsc"),
-  ["--noEmit", "-p", resolve(actionPath, "tsconfig.json")],
-  { cwd: workspace, stdio: "inherit" },
-);
 
 const document = parseDocument(readFileSync(configPath, "utf8"), { uniqueKeys: true, schema: "core" });
 if (document.errors.length > 0) {
@@ -110,10 +102,4 @@ for (const [name, value] of Object.entries(outputs)) {
   }
 }
 
-const outputPath = process.env.GITHUB_OUTPUT;
-if (!outputPath) {
-  throw new Error("GITHUB_OUTPUT is required.");
-}
-
-const { appendFileSync } = await import("node:fs");
-appendFileSync(outputPath, Object.entries(outputs).map(([name, value]) => `${name}=${value}`).join("\n") + "\n");
+writeValues("GITHUB_OUTPUT", outputs);

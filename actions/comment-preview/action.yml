@@ -1,0 +1,22 @@
+name: Comment preview URL
+description: "Creates or updates the bot's preview URL comment on a pull request."
+inputs:
+  url:
+    description: Deployed preview URL.
+    required: true
+  pr-number:
+    description: Pull request number.
+    required: true
+  github-token:
+    description: Token with pull request comment permissions.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PREVIEW_URL: ${{ inputs.url }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/comment-preview.ts"

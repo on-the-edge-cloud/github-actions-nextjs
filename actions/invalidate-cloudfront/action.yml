@@ -1,0 +1,19 @@
+name: Invalidate CloudFront
+description: Creates a full invalidation and waits for completion.
+inputs:
+  distribution-id:
+    description: CloudFront distribution ID.
+    required: true
+outputs:
+  invalidation-id:
+    description: Created invalidation ID.
+    value: ${{ steps.invalidation.outputs.invalidation-id }}
+runs:
+  using: composite
+  steps:
+    - id: invalidation
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DISTRIBUTION_ID: ${{ inputs.distribution-id }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/invalidate-cloudfront.ts"

@@ -1,0 +1,19 @@
+name: Initialize Terraform backend
+description: >-
+  Initializes an isolated S3 state for the caller, hosting mode and environment.
+inputs:
+  bucket:
+    description: Terraform state bucket.
+    default: on-the-edge-terraform-state
+  region:
+    description: Terraform state bucket region.
+    default: eu-north-1
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        STATE_BUCKET: ${{ inputs.bucket }}
+        STATE_REGION: ${{ inputs.region }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/terraform-backend.ts"

@@ -1,0 +1,22 @@
+name: Read deployment outputs
+description: Reads the Terraform application URL and CloudFront distribution ID.
+inputs:
+  environment:
+    description: Deployment environment, preview or production.
+    required: true
+outputs:
+  url:
+    description: Deployed application URL.
+    value: ${{ steps.outputs.outputs.url }}
+  distribution-id:
+    description: CloudFront distribution ID.
+    value: ${{ steps.outputs.outputs.distribution-id }}
+runs:
+  using: composite
+  steps:
+    - id: outputs
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/deployment-outputs.ts"

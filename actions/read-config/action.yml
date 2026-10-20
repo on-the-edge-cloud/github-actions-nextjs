@@ -50,21 +50,10 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 22
-
-    - name: Install config reader dependencies
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-      run: npm ci --prefix "$ACTION_PATH"
-
     - id: config
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
         CONFIG_PATH: ${{ inputs.config-path }}
         COMMAND: ${{ inputs.command }}
-      run: |
-        "$ACTION_PATH/node_modules/.bin/tsx" "$ACTION_PATH/read-config.ts" "$CONFIG_PATH" "$COMMAND"
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/read-config.ts"
