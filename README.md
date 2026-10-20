@@ -13,7 +13,7 @@ on:
 
 jobs:
   preview:
-    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-preview.yml@v1
+    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-preview.yml@v1.9
     with:
       config-path: nextjs-app.yml
       command: ${{ github.event.action == 'closed' && 'destroy' || 'deploy' }}
@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   production:
-    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-production.yml@v1.4
+    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-production.yml@v1.9
     with:
       config-path: nextjs-app.yml
     secrets: inherit
@@ -73,3 +73,7 @@ npm ci --prefix actions
 npm run check --prefix actions
 npm test --prefix actions
 ```
+
+## Releases
+
+Every push to `main` runs the action checks and publishes the next GitHub release and tag: `v1.9`, `v1.10`, and so on, continuing from `v1.8`. The release commit updates workflow references in tracked README files and uses `[skip ci]` to avoid recursion. Rerunning the same push reuses its release. The workflow needs permission to push to `main`; branch protection must allow the release bot. The first automatic release publishes `v1.9` before clients can use the examples above.

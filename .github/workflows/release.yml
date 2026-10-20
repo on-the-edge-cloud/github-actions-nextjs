@@ -1,0 +1,33 @@
+name: Publish release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install action dependencies
+        run: npm ci --prefix actions
+
+      - name: Check action types
+        run: npm run check --prefix actions
+
+      - name: Test actions
+        run: npm test --prefix actions
+
+      - name: Publish release
+        uses: ./actions/release

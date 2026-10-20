@@ -1,0 +1,23 @@
+name: Publish release
+description: Publish the next platform version.
+
+inputs:
+  github-token:
+    description: Token permitted to push commits, tags and releases.
+    default: ${{ github.token }}
+outputs:
+  version:
+    description: Published version tag.
+    value: ${{ steps.release.outputs.version }}
+  release-url:
+    description: GitHub release URL.
+    value: ${{ steps.release.outputs.release-url }}
+runs:
+  using: composite
+  steps:
+    - id: release
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/release.ts"
