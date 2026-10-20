@@ -165,8 +165,10 @@ jobs:
         run: |
           set -euo pipefail
           app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
+          terraform_directory="preview"
 
           if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
+            terraform_directory="static"
             workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-pr-${PR_NUMBER}"
           elif [[ -z "$WORKSPACE_PREFIX" ]]; then
             workspace="pr-${PR_NUMBER}"
@@ -175,7 +177,7 @@ jobs:
           fi
 
           {
-            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${DEPLOYMENT_TYPE}"
+            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${terraform_directory}"
             echo "TF_IN_AUTOMATION=true"
             echo "TF_INPUT=false"
             echo "TF_VAR_app_slug=$APP_SLUG"
@@ -185,7 +187,7 @@ jobs:
             echo "PREVIEW_WORKSPACE=$workspace"
           } >> "$GITHUB_ENV"
 
-          echo "::notice title=Terraform configuration::Root: terraform/${DEPLOYMENT_TYPE}; workspace: ${workspace}"
+          echo "::notice title=Terraform configuration::Root: terraform/${terraform_directory}; workspace: ${workspace}"
 
       - name: Format Terraform
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
