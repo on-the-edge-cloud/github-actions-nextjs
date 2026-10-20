@@ -6,7 +6,6 @@ import { writeValues } from "../lib.js";
 type AppConfig = {
   app: {
     slug?: string;
-    "workspace-prefix"?: string;
     directory?: string;
     "node-version"?: string;
     "install-command"?: string;
@@ -15,9 +14,7 @@ type AppConfig = {
     "build-command"?: string;
     "opennext-build-command"?: string;
     "smoke-test-command"?: string;
-  };
-  preview: {
-    "aws-region": string;
+    "aws-region"?: string;
     "deployment-type"?: "static" | "ssr";
   };
 };
@@ -46,8 +43,11 @@ if (document.errors.length > 0) {
 }
 
 const config = document.toJS() as Partial<AppConfig> | null;
-if (!config || typeof config !== "object" || !config.app || typeof config.app !== "object" || !config.preview || typeof config.preview !== "object") {
-  throw new Error("Configuration must contain app and preview mappings.");
+if (!config || typeof config !== "object" || !config.app || typeof config.app !== "object" || Array.isArray(config.app)) {
+  throw new Error("Configuration must contain an app mapping.");
+}
+if (Object.keys(config).some(key => key !== "app")) {
+  throw new Error("Configuration only supports the app mapping. Move deployment settings into app.");
 }
 
 const appDirectory = config.app.directory ?? ".";
@@ -66,25 +66,19 @@ const slug = config.app.slug ?? repositoryName;
 if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 24) {
   throw new Error("app.slug must use lowercase letters, digits and single hyphens, and be at most 24 characters.");
 }
-const workspacePrefix = config.app["workspace-prefix"] ?? slug;
-if (workspacePrefix !== "" && (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workspacePrefix) || workspacePrefix.length > 24)) {
-  throw new Error("app.workspace-prefix must be empty or use lowercase letters, digits and single hyphens.");
-}
-
-const region = config.preview["aws-region"];
+const region = config.app["aws-region"];
 if (!region || !/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/.test(region)) {
-  throw new Error("preview.aws-region is invalid.");
+  throw new Error("app.aws-region is invalid.");
 }
 
-const deploymentType = config.preview["deployment-type"] ?? "ssr";
+const deploymentType = config.app["deployment-type"] ?? "ssr";
 if (deploymentType !== "static" && deploymentType !== "ssr") {
-  throw new Error("preview.deployment-type must be either static or ssr.");
+  throw new Error("app.deployment-type must be either static or ssr.");
 }
 
 const outputs: Record<string, string> = {
   "app-directory": appDirectory,
   "app-slug": slug,
-  "workspace-prefix": workspacePrefix,
   "node-version": config.app["node-version"] ?? "22",
   "install-command": config.app["install-command"] ?? "npm ci",
   "lint-command": config.app["lint-command"] ?? "npm run lint",

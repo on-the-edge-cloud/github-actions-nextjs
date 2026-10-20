@@ -1,12 +1,12 @@
 app:
+  slug: "my-nextjs-app"
   directory: "."
   node-version: "22"
+  aws-region: "eu-north-1"
+  deployment-type: "ssr"
   install-command: "npm ci"
   lint-command: "npm run lint"
   test-command: "npm test"
   build-command: ""
   opennext-build-command: "npm run opennext:build"
-
-preview:
-  deployment-type: "ssr"
-  aws-region: "eu-north-1"
+  smoke-test-command: ""

@@ -16,9 +16,6 @@ outputs:
   app-slug:
     description: Unique lowercase identifier for this application.
     value: ${{ steps.config.outputs.app-slug }}
-  workspace-prefix:
-    description: Optional prefix for Terraform preview workspace names.
-    value: ${{ steps.config.outputs.workspace-prefix }}
   node-version:
     description: Node.js version used by the build.
     value: ${{ steps.config.outputs.node-version }}
@@ -41,7 +38,7 @@ outputs:
     description: Optional override for the platform smoke test.
     value: ${{ steps.config.outputs.smoke-test-command }}
   aws-region:
-    description: AWS region for preview resources.
+    description: AWS region shared by preview and production.
     value: ${{ steps.config.outputs.aws-region }}
   deployment-type:
     description: Application hosting mode, static or ssr.

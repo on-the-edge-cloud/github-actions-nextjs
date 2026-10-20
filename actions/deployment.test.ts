@@ -42,8 +42,7 @@ function commands(workspace: string): string[][] {
 for (const command of ["deploy", "destroy"]) {
   test(`read config ${command} uses the shared runtime`, () => fixture(workspace => {
     writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
-      app: { directory: "app" },
-      preview: { "aws-region": "eu-north-1" },
+      app: { directory: "app", "aws-region": "eu-north-1" },
     }));
     const result = execute("read-config", {
       GITHUB_WORKSPACE: workspace,
@@ -60,7 +59,6 @@ for (const command of ["deploy", "destroy"]) {
     assert.deepEqual(values, {
       "app-directory": "app",
       "app-slug": "example-app",
-      "workspace-prefix": "example-app",
       "node-version": "22",
       "install-command": "npm ci",
       "lint-command": "npm run lint",
@@ -74,13 +72,13 @@ for (const command of ["deploy", "destroy"]) {
   }));
 }
 
-for (const [name, app, preview, command, message] of [
-  ["invalid mode", { directory: "app" }, { "aws-region": "eu-north-1", "deployment-type": "invalid" }, "deploy", "preview.deployment-type"],
-  ["directory traversal", { directory: ".." }, { "aws-region": "eu-north-1" }, "deploy", "app.directory"],
-  ["invalid command", { directory: "app" }, { "aws-region": "eu-north-1" }, "invalid", "Command must be deploy or destroy"],
+for (const [name, app, command, message] of [
+  ["invalid mode", { directory: "app", "aws-region": "eu-north-1", "deployment-type": "invalid" }, "deploy", "app.deployment-type"],
+  ["directory traversal", { directory: "..", "aws-region": "eu-north-1" }, "deploy", "app.directory"],
+  ["invalid command", { directory: "app", "aws-region": "eu-north-1" }, "invalid", "Command must be deploy or destroy"],
 ] as const) {
   test(`read config rejects ${name}`, () => fixture(workspace => {
-    writeFileSync(join(workspace, "nextjs-app.yml"), stringify({ app, preview }));
+    writeFileSync(join(workspace, "nextjs-app.yml"), stringify({ app }));
     const result = execute("read-config", {
       GITHUB_WORKSPACE: workspace,
       GITHUB_REPOSITORY: "owner/example-app",
@@ -95,8 +93,7 @@ for (const [name, app, preview, command, message] of [
 
 test("read config preserves the smoke test override", () => fixture(workspace => {
   writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
-    app: { directory: "app", "smoke-test-command": "npm run smoke" },
-    preview: { "aws-region": "eu-north-1" },
+    app: { directory: "app", "aws-region": "eu-north-1", "smoke-test-command": "npm run smoke" },
   }));
   const result = execute("read-config", {
     GITHUB_WORKSPACE: workspace,
@@ -108,6 +105,84 @@ test("read config preserves the smoke test override", () => fixture(workspace =>
   assert.equal(result.status, 0, result.stderr);
   assert(readFileSync(join(workspace, "outputs"), "utf8").includes("smoke-test-command=npm run smoke\n"));
 }));
+
+for (const filename of ["nextjs-app.yml", "nextjs-app-minimal.yml"]) {
+  for (const command of ["deploy", "destroy"]) {
+    test(`read config example ${filename}/${command}`, () => fixture(workspace => {
+      const example = readFileSync(resolve(actionsRoot, `../examples/${filename}`), "utf8");
+      const config = parseDocument(example).toJS();
+      assert.deepEqual(Object.keys(config), ["app"]);
+      if (filename === "nextjs-app-minimal.yml") assert.deepEqual(Object.keys(config.app), ["aws-region"]);
+      writeFileSync(join(workspace, "nextjs-app.yml"), example);
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace,
+        GITHUB_REPOSITORY: "owner/example-app",
+        GITHUB_OUTPUT: join(workspace, "outputs"),
+        CONFIG_PATH: "nextjs-app.yml",
+        COMMAND: command,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const values = Object.fromEntries(readFileSync(join(workspace, "outputs"), "utf8").trim().split("\n").map(line => {
+        const position = line.indexOf("=");
+        return [line.slice(0, position), line.slice(position + 1)];
+      }));
+      assert.deepEqual(values, {
+        "app-directory": ".",
+        "app-slug": filename === "nextjs-app.yml" ? "my-nextjs-app" : "example-app",
+        "aws-region": "eu-north-1",
+        "deployment-type": "ssr",
+        "node-version": "22",
+        "install-command": "npm ci",
+        "lint-command": "npm run lint",
+        "test-command": filename === "nextjs-app.yml" ? "npm test" : "",
+        "build-command": "",
+        "opennext-build-command": "npm run opennext:build",
+        "smoke-test-command": "",
+      });
+      if (filename === "nextjs-app.yml") {
+        const inputs = Object.keys(config.app).map(name => name === "directory" ? "app-directory" : name === "slug" ? "app-slug" : name);
+        assert.deepEqual(inputs.sort(), Object.keys(values).sort());
+      }
+    }));
+  }
+}
+
+for (const app of [{}, { "aws-region": "eu-west-1", "deployment-type": "static" }]) {
+  test(`read config rejects legacy preview ${Object.keys(app).length ? "with" : "without"} app settings`, () => fixture(workspace => {
+    writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+      app,
+      preview: { "aws-region": "eu-north-1", "deployment-type": "ssr" },
+    }));
+    const result = execute("read-config", {
+      GITHUB_WORKSPACE: workspace,
+      GITHUB_REPOSITORY: "owner/example-app",
+      GITHUB_OUTPUT: join(workspace, "outputs"),
+      CONFIG_PATH: "nextjs-app.yml",
+      COMMAND: "deploy",
+    });
+    assert.notEqual(result.status, 0);
+    assert(result.stderr.includes("Configuration only supports the app mapping"), result.stderr);
+  }));
+}
+
+for (const [name, app, message] of [
+  ["invalid shared region", { "aws-region": "invalid" }, "app.aws-region"],
+  ["invalid shared mode", { "aws-region": "eu-north-1", "deployment-type": "invalid" }, "app.deployment-type"],
+  ["missing region", {}, "app.aws-region"],
+] as const) {
+  test(`read config rejects ${name}`, () => fixture(workspace => {
+    writeFileSync(join(workspace, "nextjs-app.yml"), stringify({ app }));
+    const result = execute("read-config", {
+      GITHUB_WORKSPACE: workspace,
+      GITHUB_REPOSITORY: "owner/example-app",
+      GITHUB_OUTPUT: join(workspace, "outputs"),
+      CONFIG_PATH: "nextjs-app.yml",
+      COMMAND: "deploy",
+    });
+    assert.notEqual(result.status, 0);
+    assert(result.stderr.includes(message), result.stderr);
+  }));
+}
 
 for (const mode of ["ssr", "static"]) {
   for (const pr of ["", "42"]) {

@@ -50,7 +50,7 @@ Production runs only on `main` and uses the caller's `production` environment. P
 
 ## Application config
 
-Use [`examples/nextjs-app.yml`](examples/nextjs-app.yml) for both previews and production. `app` defines build commands; `preview.aws-region` and `preview.deployment-type` (`ssr` or `static`) apply to both environments. Clients do not configure Terraform versions.
+Use the [complete example](examples/nextjs-app.yml) for all supported overrides or the [minimal example](examples/nextjs-app-minimal.yml) with only `app.aws-region`. Both apply to previews and production. Only the `app` mapping is supported; the old `preview` section must be removed. The directory defaults to the repository root, the slug to the repository name, and deployment type to `ssr`. Commands and Node.js remain overridable; clients do not configure Terraform versions. The obsolete `workspace-prefix` output has been removed.
 
 Smoke tests run automatically after CloudFront invalidation. By default, SSR apps must expose `/ssr/`, `/api/health/`, and `/isr/` with timestamps and the expected cache headers; static apps are checked for HTTP 200 at `/`. Set `app.smoke-test-command` to override these checks, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL. Omit it or leave it empty to use the defaults.
 
