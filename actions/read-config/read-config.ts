@@ -21,28 +21,34 @@ type AppConfig = {
 
 const workspace = realpathSync(process.env.GITHUB_WORKSPACE ?? process.cwd());
 const requestedConfigPath = process.env.CONFIG_PATH;
+const requestedRegion = process.env.AWS_REGION;
 const command = process.env.COMMAND;
 
-if (!requestedConfigPath || !command) {
-  throw new Error("CONFIG_PATH and COMMAND are required.");
+if ((!requestedConfigPath && !requestedRegion) || !command) {
+  throw new Error("Either CONFIG_PATH or AWS_REGION, and COMMAND, are required.");
 }
 
 if (command !== "deploy" && command !== "destroy") {
   throw new Error("Command must be deploy or destroy.");
 }
 
-const configPath = realpathSync(resolve(workspace, requestedConfigPath));
-const configRelativePath = relative(workspace, configPath);
-if (isAbsolute(configRelativePath) || configRelativePath === ".." || configRelativePath.startsWith(`..${sep}`)) {
-  throw new Error("Configuration must be inside the checked-out repository.");
+let config: Partial<AppConfig> | null;
+if (requestedConfigPath) {
+  const configPath = realpathSync(resolve(workspace, requestedConfigPath));
+  const configRelativePath = relative(workspace, configPath);
+  if (isAbsolute(configRelativePath) || configRelativePath === ".." || configRelativePath.startsWith(`..${sep}`)) {
+    throw new Error("Configuration must be inside the checked-out repository.");
+  }
+
+  const document = parseDocument(readFileSync(configPath, "utf8"), { uniqueKeys: true, schema: "core" });
+  if (document.errors.length > 0) {
+    throw new Error(`Invalid YAML configuration: ${document.errors.map((error) => error.message).join("; ")}`);
+  }
+  config = document.toJS() as Partial<AppConfig> | null;
+} else {
+  config = { app: {} };
 }
 
-const document = parseDocument(readFileSync(configPath, "utf8"), { uniqueKeys: true, schema: "core" });
-if (document.errors.length > 0) {
-  throw new Error(`Invalid YAML configuration: ${document.errors.map((error) => error.message).join("; ")}`);
-}
-
-const config = document.toJS() as Partial<AppConfig> | null;
 if (!config || typeof config !== "object" || !config.app || typeof config.app !== "object" || Array.isArray(config.app)) {
   throw new Error("Configuration must contain an app mapping.");
 }
@@ -66,7 +72,7 @@ const slug = config.app.slug ?? repositoryName;
 if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 24) {
   throw new Error("app.slug must use lowercase letters, digits and single hyphens, and be at most 24 characters.");
 }
-const region = config.app["aws-region"];
+const region = requestedRegion || config.app["aws-region"];
 if (!region || !/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/.test(region)) {
   throw new Error("app.aws-region is invalid.");
 }

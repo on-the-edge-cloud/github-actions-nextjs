@@ -15,7 +15,7 @@ jobs:
   preview:
     uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-preview.yml@v1.9
     with:
-      config-path: nextjs-app.yml
+      aws-region: eu-north-1
       command: ${{ github.event.action == 'closed' && 'destroy' || 'deploy' }}
     secrets: inherit
 ```
@@ -42,7 +42,7 @@ jobs:
   production:
     uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-production.yml@v1.9
     with:
-      config-path: nextjs-app.yml
+      aws-region: eu-north-1
     secrets: inherit
 ```
 
@@ -50,7 +50,7 @@ Production runs only on `main` and uses the caller's `production` environment. P
 
 ## Application config
 
-Use the [complete example](examples/nextjs-app.yml) for all supported overrides or the [minimal example](examples/nextjs-app-minimal.yml) with only `app.aws-region`. Both apply to previews and production. Only the `app` mapping is supported; the old `preview` section must be removed. The directory defaults to the repository root, the slug to the repository name, and deployment type to `ssr`. Commands and Node.js remain overridable; clients do not configure Terraform versions. The obsolete `workspace-prefix` output has been removed.
+Pass `aws-region` directly in each caller workflow when no other settings need customization; this avoids creating a separate config file. Use the [complete example](examples/nextjs-app.yml) with `config-path` for application overrides. When both are provided, the workflow input `aws-region` takes precedence. Only the `app` mapping is supported in config files; the old `preview` section must be removed. The directory defaults to the repository root, the slug to the repository name, and deployment type to `ssr`. Commands and Node.js remain overridable; clients do not configure Terraform versions. The obsolete `workspace-prefix` output has been removed.
 
 Smoke tests run automatically after CloudFront invalidation. By default, SSR apps must expose `/ssr/`, `/api/health/`, and `/isr/` with timestamps and the expected cache headers; static apps are checked for HTTP 200 at `/`. Set `app.smoke-test-command` to override these checks, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL. Omit it or leave it empty to use the defaults.
 

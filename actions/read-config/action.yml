@@ -4,7 +4,10 @@ description: Validates nextjs-app.yml and exposes app settings as action outputs
 inputs:
   config-path:
     description: Path to nextjs-app.yml inside the checked-out app.
-    required: true
+    required: false
+  aws-region:
+    description: AWS region used when no config file is provided, or as an override.
+    required: false
   command:
     description: Preview operation, either deploy or destroy.
     required: true
@@ -52,5 +55,6 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
         CONFIG_PATH: ${{ inputs.config-path }}
+        AWS_REGION: ${{ inputs.aws-region }}
         COMMAND: ${{ inputs.command }}
       run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/read-config.ts"

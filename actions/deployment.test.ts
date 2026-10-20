@@ -197,6 +197,25 @@ for (const command of ["deploy", "destroy"]) {
   }));
 }
 
+test("read config uses a direct AWS region without a config file", () => fixture(workspace => {
+  const result = execute("read-config", {
+    GITHUB_WORKSPACE: workspace,
+    GITHUB_REPOSITORY: "owner/example-app",
+    GITHUB_OUTPUT: join(workspace, "outputs"),
+    AWS_REGION: "eu-north-1",
+    COMMAND: "deploy",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const values = Object.fromEntries(readFileSync(join(workspace, "outputs"), "utf8").trim().split("\n").map(line => {
+    const position = line.indexOf("=");
+    return [line.slice(0, position), line.slice(position + 1)];
+  }));
+  assert.equal(values["app-directory"], ".");
+  assert.equal(values["app-slug"], "example-app");
+  assert.equal(values["aws-region"], "eu-north-1");
+  assert.equal(values["deployment-type"], "ssr");
+}));
+
 for (const [name, app, command, message] of [
   ["invalid mode", { directory: "app", "aws-region": "eu-north-1", "deployment-type": "invalid" }, "deploy", "app.deployment-type"],
   ["directory traversal", { directory: "..", "aws-region": "eu-north-1" }, "deploy", "app.directory"],

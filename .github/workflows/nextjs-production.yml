@@ -5,7 +5,11 @@ on:
     inputs:
       config-path:
         description: Path to nextjs-app.yml in the caller repository.
-        required: true
+        required: false
+        type: string
+      aws-region:
+        description: AWS region for the application. Overrides the config file when both are provided.
+        required: false
         type: string
     secrets:
       AWS_ROLE_ARN:
@@ -47,6 +51,7 @@ jobs:
         uses: ./.platform/actions/read-config
         with:
           config-path: ${{ inputs.config-path }}
+          aws-region: ${{ inputs.aws-region }}
           command: deploy
 
       - name: Checkout Terraform module version
