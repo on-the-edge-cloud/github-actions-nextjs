@@ -52,6 +52,8 @@ Production runs only on `main` and uses the caller's `production` environment. P
 
 Use [`examples/nextjs-app.yml`](examples/nextjs-app.yml) for both previews and production. `app` defines build commands; `preview.aws-region` and `preview.deployment-type` (`ssr` or `static`) apply to both environments. Clients do not configure Terraform versions.
 
+Smoke tests run automatically after CloudFront invalidation. By default, SSR apps must expose `/ssr/`, `/api/health/`, and `/isr/` with timestamps and the expected cache headers; static apps are checked for HTTP 200 at `/`. Set `app.smoke-test-command` to override these checks, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL. Omit it or leave it empty to use the defaults.
+
 ## Terraform state
 
 State is isolated by repository, hosting mode, and PR or production. The AWS role needs access to the S3 state and lock files. Existing infrastructure requires state migration before deploy or destroy; migration is not automatic. Back up the old state, reconcile resource addresses with the new module, and review the plan before applying.
@@ -62,7 +64,7 @@ The workflow skips fork pull requests. App commands are executed from the PR che
 
 ## Shared actions
 
-TypeScript actions in `actions/` handle application commands, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, and preview comments.
+TypeScript actions in `actions/` handle application commands, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, smoke tests, and preview comments.
 
 ```bash
 npm ci --prefix actions

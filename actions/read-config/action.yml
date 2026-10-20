@@ -38,7 +38,7 @@ outputs:
     description: OpenNext build command.
     value: ${{ steps.config.outputs.opennext-build-command }}
   smoke-test-command:
-    description: Optional smoke test command; PREVIEW_URL is available.
+    description: Optional override for the platform smoke test.
     value: ${{ steps.config.outputs.smoke-test-command }}
   aws-region:
     description: AWS region for preview resources.

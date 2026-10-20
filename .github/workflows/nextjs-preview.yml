@@ -160,13 +160,13 @@ jobs:
           distribution-id: ${{ steps.preview.outputs.distribution-id }}
 
       - name: Smoke test preview
-        if: inputs.command == 'deploy' && steps.config.outputs.smoke-test-command != ''
-        uses: ./.platform/actions/run-command
-        env:
-          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+        if: inputs.command == 'deploy'
+        uses: ./.platform/actions/smoke-test
         with:
-          working-directory: ${{ steps.config.outputs.app-directory }}
+          url: ${{ steps.preview.outputs.url }}
+          deployment-type: ${{ steps.config.outputs.deployment-type }}
           command: ${{ steps.config.outputs.smoke-test-command }}
+          working-directory: ${{ steps.config.outputs.app-directory }}
 
       - name: Comment preview URL
         if: inputs.command == 'deploy'

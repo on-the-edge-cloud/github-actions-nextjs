@@ -1,0 +1,27 @@
+name: Smoke test deployment
+description: Run deployment smoke checks.
+
+inputs:
+  url:
+    description: Deployed application URL.
+    required: true
+  deployment-type:
+    description: Hosting mode, static or ssr.
+    required: true
+  command:
+    description: Optional command replacing the built-in smoke test.
+    default: ""
+  working-directory:
+    description: Application directory for the custom command.
+    default: .
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        BASE_URL: ${{ inputs.url }}
+        DEPLOYMENT_TYPE: ${{ inputs.deployment-type }}
+        SMOKE_TEST_COMMAND: ${{ inputs.command }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/smoke-test.ts"

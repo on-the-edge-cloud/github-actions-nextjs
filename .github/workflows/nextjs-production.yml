@@ -145,14 +145,12 @@ jobs:
           distribution-id: ${{ steps.production.outputs.distribution-id }}
 
       - name: Smoke test production
-        if: steps.config.outputs.smoke-test-command != ''
-        uses: ./.platform/actions/run-command
-        env:
-          PRODUCTION_URL: ${{ steps.production.outputs.url }}
-          PREVIEW_URL: ${{ steps.production.outputs.url }}
+        uses: ./.platform/actions/smoke-test
         with:
-          working-directory: ${{ steps.config.outputs.app-directory }}
+          url: ${{ steps.production.outputs.url }}
+          deployment-type: ${{ steps.config.outputs.deployment-type }}
           command: ${{ steps.config.outputs.smoke-test-command }}
+          working-directory: ${{ steps.config.outputs.app-directory }}
 
       - name: Announce production URL
         env:

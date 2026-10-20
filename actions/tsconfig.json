@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "read-config/*.ts", "prepare-terraform/*.ts", "terraform-backend/*.ts", "deployment-outputs/*.ts", "invalidate-cloudfront/*.ts", "run-command/*.ts", "comment-preview/*.ts"]
+  "include": ["*.ts", "read-config/*.ts", "prepare-terraform/*.ts", "terraform-backend/*.ts", "deployment-outputs/*.ts", "invalidate-cloudfront/*.ts", "run-command/*.ts", "comment-preview/*.ts", "smoke-test/*.ts"]
 }
