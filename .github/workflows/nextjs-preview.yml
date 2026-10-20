@@ -64,6 +64,7 @@ jobs:
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
         shell: bash
         env:
+          COMMAND: ${{ inputs.command }}
           APP_SLUG: ${{ steps.config.outputs.app-slug }}
           WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
           DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
@@ -78,7 +79,7 @@ jobs:
             workspace="${WORKSPACE_PREFIX}-pr-${PR_NUMBER}"
           fi
 
-          echo "::notice title=Preview workflow::${inputs.command} for ${APP_SLUG}, PR ${PR_NUMBER}, workspace ${workspace}"
+          echo "::notice title=Preview workflow::${COMMAND} for ${APP_SLUG}, PR ${PR_NUMBER}, workspace ${workspace}"
           {
             echo "### Preview workflow"
             printf -- '- App: `%s`\n' "$APP_SLUG"
