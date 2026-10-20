@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/github-actions-nextjs
-          ref: v1.4
+          ref: main
           path: .platform
 
       - name: Read application configuration
