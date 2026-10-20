@@ -1,0 +1,216 @@
+name: Next.js production environment
+
+on:
+  workflow_call:
+    inputs:
+      config-path:
+        description: Path to nextjs-app.yml in the caller repository.
+        required: true
+        type: string
+      platform-ref:
+        description: Git ref of this platform repository.
+        required: false
+        type: string
+        default: v1.4
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
+    outputs:
+      production-url:
+        description: URL of the deployed production application.
+        value: ${{ jobs.production.outputs.production-url }}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  production:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    outputs:
+      production-url: ${{ steps.production.outputs.production-url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout actions platform
+        uses: actions/checkout@v4
+        with:
+          repository: on-the-edge-cloud/github-actions-nextjs
+          ref: ${{ inputs.platform-ref }}
+          path: .platform
+
+      - name: Read application configuration
+        id: config
+        uses: ./.platform/actions/read-config
+        with:
+          config-path: ${{ inputs.config-path }}
+          command: deploy
+
+      - name: Checkout Terraform module version
+        uses: actions/checkout@v4
+        with:
+          repository: on-the-edge-cloud/terraform-aws-nextjs
+          ref: ${{ steps.config.outputs.terraform-module-version }}
+          path: .terraform-modules
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.config.outputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ steps.config.outputs.app-directory }}/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          INSTALL_COMMAND: ${{ steps.config.outputs.install-command }}
+        run: bash -euo pipefail -c "$INSTALL_COMMAND"
+
+      - name: Lint
+        if: steps.config.outputs.lint-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          LINT_COMMAND: ${{ steps.config.outputs.lint-command }}
+        run: bash -euo pipefail -c "$LINT_COMMAND"
+
+      - name: Test application
+        if: steps.config.outputs.test-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          TEST_COMMAND: ${{ steps.config.outputs.test-command }}
+        run: bash -euo pipefail -c "$TEST_COMMAND"
+
+      - name: Build Next.js
+        if: steps.config.outputs.build-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          BUILD_COMMAND: ${{ steps.config.outputs.build-command }}
+        run: bash -euo pipefail -c "$BUILD_COMMAND"
+
+      - name: Build OpenNext
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          OPENNEXT_BUILD_COMMAND: ${{ steps.config.outputs.opennext-build-command }}
+        run: bash -euo pipefail -c "$OPENNEXT_BUILD_COMMAND"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ steps.config.outputs.aws-region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Prepare Terraform variables
+        shell: bash
+        env:
+          APP_DIRECTORY: ${{ steps.config.outputs.app-directory }}
+          APP_SLUG: ${{ steps.config.outputs.app-slug }}
+          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
+          DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
+          AWS_REGION: ${{ steps.config.outputs.aws-region }}
+        run: |
+          set -euo pipefail
+          app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
+          terraform_directory="preview"
+          workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-production"
+
+          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
+            terraform_directory="static"
+            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-production"
+          fi
+
+          {
+            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${terraform_directory}"
+            echo "TF_IN_AUTOMATION=true"
+            echo "TF_INPUT=false"
+            echo "TF_VAR_app_slug=$APP_SLUG"
+            echo "TF_VAR_aws_region=$AWS_REGION"
+            echo "TF_VAR_pr_number="
+            echo "TF_VAR_app_directory=$app_root"
+            echo "PRODUCTION_WORKSPACE=$workspace"
+          } >> "$GITHUB_ENV"
+
+          echo "::notice title=Production workflow::Deploying ${APP_SLUG}, workspace ${workspace}"
+          {
+            echo "### Production workflow"
+            printf -- '- App: `%s`\n' "$APP_SLUG"
+            printf -- '- Region: `%s`\n' "$AWS_REGION"
+            printf -- '- Workspace: `%s`\n' "$workspace"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Format Terraform
+        run: terraform -chdir="$TERRAFORM_ROOT" fmt -check -recursive
+
+      - name: Initialize Terraform without backend
+        run: terraform -chdir="$TERRAFORM_ROOT" init -backend=false -input=false
+
+      - name: Validate Terraform
+        run: terraform -chdir="$TERRAFORM_ROOT" validate
+
+      - name: Initialize Terraform backend
+        run: terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false
+
+      - name: Select or create production workspace
+        run: terraform -chdir="$TERRAFORM_ROOT" workspace select -or-create "$PRODUCTION_WORKSPACE"
+
+      - name: Plan production
+        run: terraform -chdir="$TERRAFORM_ROOT" plan -out="$RUNNER_TEMP/production.tfplan"
+
+      - name: Deploy production
+        run: terraform -chdir="$TERRAFORM_ROOT" apply "$RUNNER_TEMP/production.tfplan"
+
+      - name: Read production URL
+        id: production
+        shell: bash
+        run: |
+          production_url=$(terraform -chdir="$TERRAFORM_ROOT" output -raw preview_url)
+          distribution_id=$(terraform -chdir="$TERRAFORM_ROOT" output -raw cloudfront_distribution_id)
+          echo "production-url=$production_url" >> "$GITHUB_OUTPUT"
+          echo "distribution-id=$distribution_id" >> "$GITHUB_OUTPUT"
+          echo "### Production deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $production_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create CloudFront invalidation
+        id: invalidation
+        env:
+          DISTRIBUTION_ID: ${{ steps.production.outputs.distribution-id }}
+        run: |
+          id=$(aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for CloudFront invalidation
+        env:
+          DISTRIBUTION_ID: ${{ steps.production.outputs.distribution-id }}
+          INVALIDATION_ID: ${{ steps.invalidation.outputs.id }}
+        run: aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
+
+      - name: Smoke test production
+        if: steps.config.outputs.smoke-test-command != ''
+        shell: bash
+        working-directory: ${{ steps.config.outputs.app-directory }}
+        env:
+          PRODUCTION_URL: ${{ steps.production.outputs.production-url }}
+          PREVIEW_URL: ${{ steps.production.outputs.production-url }}
+          SMOKE_TEST_COMMAND: ${{ steps.config.outputs.smoke-test-command }}
+        run: bash -euo pipefail -c "$SMOKE_TEST_COMMAND"
