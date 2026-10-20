@@ -7,11 +7,6 @@ on:
         description: Path to nextjs-app.yml in the caller repository.
         required: true
         type: string
-      platform-ref:
-        description: Git ref of this platform repository.
-        required: false
-        type: string
-        default: v1.4
     secrets:
       AWS_ROLE_ARN:
         required: true
@@ -44,7 +39,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/github-actions-nextjs
-          ref: ${{ inputs.platform-ref }}
+          ref: v1.4
           path: .platform
 
       - name: Read application configuration
@@ -58,7 +53,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/terraform-aws-nextjs
-          ref: ${{ steps.config.outputs.terraform-module-version }}
+          ref: v1.4
           path: .terraform-modules
 
       - name: Setup Node.js
@@ -122,37 +117,29 @@ jobs:
         env:
           APP_DIRECTORY: ${{ steps.config.outputs.app-directory }}
           APP_SLUG: ${{ steps.config.outputs.app-slug }}
-          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
           DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
           AWS_REGION: ${{ steps.config.outputs.aws-region }}
         run: |
           set -euo pipefail
           app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
-          terraform_directory="preview"
-          workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-production"
-
-          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
-            terraform_directory="static"
-            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-production"
-          fi
 
           {
-            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${terraform_directory}"
+            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform"
             echo "TF_IN_AUTOMATION=true"
             echo "TF_INPUT=false"
             echo "TF_VAR_app_slug=$APP_SLUG"
+            echo "TF_VAR_deployment_type=$DEPLOYMENT_TYPE"
             echo "TF_VAR_aws_region=$AWS_REGION"
             echo "TF_VAR_pr_number="
             echo "TF_VAR_app_directory=$app_root"
-            echo "PRODUCTION_WORKSPACE=$workspace"
           } >> "$GITHUB_ENV"
 
-          echo "::notice title=Production workflow::Deploying ${APP_SLUG}, workspace ${workspace}"
+          echo "::notice title=Production workflow::Deploying ${APP_SLUG}, mode ${DEPLOYMENT_TYPE}"
           {
             echo "### Production workflow"
             printf -- '- App: `%s`\n' "$APP_SLUG"
             printf -- '- Region: `%s`\n' "$AWS_REGION"
-            printf -- '- Workspace: `%s`\n' "$workspace"
+            printf -- '- Deployment type: `%s`\n' "$DEPLOYMENT_TYPE"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Format Terraform
@@ -165,10 +152,12 @@ jobs:
         run: terraform -chdir="$TERRAFORM_ROOT" validate
 
       - name: Initialize Terraform backend
-        run: terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false
-
-      - name: Select or create production workspace
-        run: terraform -chdir="$TERRAFORM_ROOT" workspace select -or-create "$PRODUCTION_WORKSPACE"
+        run: |
+          terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false \
+            -backend-config="bucket=on-the-edge-terraform-state" \
+            -backend-config="key=nextjs/${GITHUB_REPOSITORY}/${TF_VAR_deployment_type}/${TF_VAR_pr_number:-production}.tfstate" \
+            -backend-config="region=eu-north-1" \
+            -backend-config="use_lockfile=true"
 
       - name: Plan production
         run: terraform -chdir="$TERRAFORM_ROOT" plan -out="$RUNNER_TEMP/production.tfplan"

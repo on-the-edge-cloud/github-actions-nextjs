@@ -19,7 +19,6 @@ type AppConfig = {
   };
   preview: {
     "aws-region": string;
-    "terraform-module-version": string;
     "deployment-type"?: "static" | "ssr";
   };
 };
@@ -85,11 +84,6 @@ if (!region || !/^[a-z]{2}(?:-gov)?-[a-z]+-\d$/.test(region)) {
   throw new Error("preview.aws-region is invalid.");
 }
 
-const terraformModuleVersion = config.preview["terraform-module-version"];
-if (!terraformModuleVersion || !/^v\d+\.\d+\.\d+$/.test(terraformModuleVersion)) {
-  throw new Error("preview.terraform-module-version must be a semantic version tag such as v1.3.0.");
-}
-
 const deploymentType = config.preview["deployment-type"] ?? "ssr";
 if (deploymentType !== "static" && deploymentType !== "ssr") {
   throw new Error("preview.deployment-type must be either static or ssr.");
@@ -107,7 +101,6 @@ const outputs: Record<string, string> = {
   "opennext-build-command": config.app["opennext-build-command"] ?? "npm run opennext:build",
   "smoke-test-command": config.app["smoke-test-command"] ?? "",
   "aws-region": region,
-  "terraform-module-version": terraformModuleVersion,
   "deployment-type": deploymentType,
 };
 

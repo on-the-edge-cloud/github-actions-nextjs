@@ -10,4 +10,3 @@ app:
 preview:
   deployment-type: "ssr"
   aws-region: "eu-north-1"
-  terraform-module-version: "v1.3.0"

@@ -43,9 +43,6 @@ outputs:
   aws-region:
     description: AWS region for preview resources.
     value: ${{ steps.config.outputs.aws-region }}
-  terraform-module-version:
-    description: Version tag of the Terraform module repository.
-    value: ${{ steps.config.outputs.terraform-module-version }}
   deployment-type:
     description: Application hosting mode, static or ssr.
     value: ${{ steps.config.outputs.deployment-type }}

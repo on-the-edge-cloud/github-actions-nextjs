@@ -11,11 +11,6 @@ on:
         description: "Operation to perform: deploy or destroy."
         required: true
         type: string
-      platform-ref:
-        description: Git ref of this platform repository.
-        required: false
-        type: string
-        default: v1
     secrets:
       AWS_ROLE_ARN:
         required: true
@@ -42,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/github-actions-nextjs
-          ref: ${{ inputs.platform-ref }}
+          ref: v1.4
           path: .platform
 
       - name: Read application configuration
@@ -57,7 +52,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/terraform-aws-nextjs
-          ref: ${{ steps.config.outputs.terraform-module-version }}
+          ref: v1.4
           path: .terraform-modules
 
       - name: Report preview context
@@ -66,26 +61,17 @@ jobs:
         env:
           COMMAND: ${{ inputs.command }}
           APP_SLUG: ${{ steps.config.outputs.app-slug }}
-          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
           DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
           AWS_REGION: ${{ steps.config.outputs.aws-region }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
-            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-pr-${PR_NUMBER}"
-          elif [[ -z "$WORKSPACE_PREFIX" ]]; then
-            workspace="pr-${PR_NUMBER}"
-          else
-            workspace="${WORKSPACE_PREFIX}-pr-${PR_NUMBER}"
-          fi
-
-          echo "::notice title=Preview workflow::${COMMAND} for ${APP_SLUG}, PR ${PR_NUMBER}, workspace ${workspace}"
+          echo "::notice title=Preview workflow::${COMMAND} for ${APP_SLUG}, PR ${PR_NUMBER}, mode ${DEPLOYMENT_TYPE}"
           {
             echo "### Preview workflow"
             printf -- '- App: `%s`\n' "$APP_SLUG"
             printf -- '- PR: #%s\n' "$PR_NUMBER"
             printf -- '- Region: `%s`\n' "$AWS_REGION"
-            printf -- '- Workspace: `%s`\n' "$workspace"
+            printf -- '- Deployment type: `%s`\n' "$DEPLOYMENT_TYPE"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Node.js
@@ -158,36 +144,25 @@ jobs:
         env:
           APP_DIRECTORY: ${{ steps.config.outputs.app-directory }}
           APP_SLUG: ${{ steps.config.outputs.app-slug }}
-          WORKSPACE_PREFIX: ${{ steps.config.outputs.workspace-prefix }}
           DEPLOYMENT_TYPE: ${{ steps.config.outputs.deployment-type }}
           AWS_REGION: ${{ steps.config.outputs.aws-region }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           app_root=$(realpath "$GITHUB_WORKSPACE/$APP_DIRECTORY")
-          terraform_directory="preview"
-
-          if [[ "$DEPLOYMENT_TYPE" == "static" ]]; then
-            terraform_directory="static"
-            workspace="${WORKSPACE_PREFIX:-$APP_SLUG}-static-pr-${PR_NUMBER}"
-          elif [[ -z "$WORKSPACE_PREFIX" ]]; then
-            workspace="pr-${PR_NUMBER}"
-          else
-            workspace="${WORKSPACE_PREFIX}-pr-${PR_NUMBER}"
-          fi
 
           {
-            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform/${terraform_directory}"
+            echo "TERRAFORM_ROOT=$GITHUB_WORKSPACE/.platform/terraform"
             echo "TF_IN_AUTOMATION=true"
             echo "TF_INPUT=false"
             echo "TF_VAR_app_slug=$APP_SLUG"
+            echo "TF_VAR_deployment_type=$DEPLOYMENT_TYPE"
             echo "TF_VAR_aws_region=$AWS_REGION"
             echo "TF_VAR_pr_number=$PR_NUMBER"
             echo "TF_VAR_app_directory=$app_root"
-            echo "PREVIEW_WORKSPACE=$workspace"
           } >> "$GITHUB_ENV"
 
-          echo "::notice title=Terraform configuration::Root: terraform/${terraform_directory}; workspace: ${workspace}"
+          echo "::notice title=Terraform configuration::Root: terraform; mode: ${DEPLOYMENT_TYPE}; PR: ${PR_NUMBER}"
 
       - name: Format Terraform
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
@@ -203,25 +178,12 @@ jobs:
 
       - name: Initialize Terraform backend
         if: inputs.command == 'deploy' || inputs.command == 'destroy'
-        run: terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false
-
-      - name: Select or create preview workspace
-        id: workspace
-        if: inputs.command == 'deploy' || inputs.command == 'destroy'
-        shell: bash
-        env:
-          COMMAND: ${{ inputs.command }}
         run: |
-          set -euo pipefail
-          if [[ "$COMMAND" == "deploy" ]]; then
-            terraform -chdir="$TERRAFORM_ROOT" workspace select "$PREVIEW_WORKSPACE" \
-              || terraform -chdir="$TERRAFORM_ROOT" workspace new "$PREVIEW_WORKSPACE"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          elif terraform -chdir="$TERRAFORM_ROOT" workspace select "$PREVIEW_WORKSPACE"; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          terraform -chdir="$TERRAFORM_ROOT" init -reconfigure -input=false \
+            -backend-config="bucket=on-the-edge-terraform-state" \
+            -backend-config="key=nextjs/${GITHUB_REPOSITORY}/${TF_VAR_deployment_type}/${TF_VAR_pr_number:-production}.tfstate" \
+            -backend-config="region=eu-north-1" \
+            -backend-config="use_lockfile=true"
 
       - name: Plan preview
         if: inputs.command == 'deploy'
@@ -294,17 +256,5 @@ jobs:
             }
 
       - name: Destroy preview
-        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
+        if: inputs.command == 'destroy'
         run: terraform -chdir="$TERRAFORM_ROOT" destroy -auto-approve -var="deploy_artifacts=false"
-
-      - name: Select default workspace
-        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
-        run: terraform -chdir="$TERRAFORM_ROOT" workspace select default
-
-      - name: Delete preview workspace
-        if: inputs.command == 'destroy' && steps.workspace.outputs.exists == 'true'
-        run: terraform -chdir="$TERRAFORM_ROOT" workspace delete "$PREVIEW_WORKSPACE"
-
-      - name: Report missing workspace
-        if: inputs.command == 'destroy' && steps.workspace.outputs.exists != 'true'
-        run: echo "No preview workspace exists; nothing to destroy."
