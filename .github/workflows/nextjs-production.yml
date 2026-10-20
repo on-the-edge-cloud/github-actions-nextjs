@@ -214,3 +214,9 @@ jobs:
           PREVIEW_URL: ${{ steps.production.outputs.production-url }}
           SMOKE_TEST_COMMAND: ${{ steps.config.outputs.smoke-test-command }}
         run: bash -euo pipefail -c "$SMOKE_TEST_COMMAND"
+
+      - name: Announce production URL
+        env:
+          PRODUCTION_URL: ${{ steps.production.outputs.production-url }}
+        run: |
+          echo "::notice title=Production deployed::Production URL: ${PRODUCTION_URL}"
