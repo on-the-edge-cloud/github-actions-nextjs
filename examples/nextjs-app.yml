@@ -9,5 +9,4 @@ app:
   test-command: "npm test"
   build-command: ""
   opennext-build-command: ""
-  allow-unsupported-next-version: true
   smoke-test-command: ""

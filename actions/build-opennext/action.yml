@@ -8,9 +8,6 @@ inputs:
   command:
     description: Optional command replacing the managed OpenNext build.
     default: ""
-  allow-unsupported-next-version:
-    description: Proceed when the installed Next.js version is unsupported.
-    default: "true"
 runs:
   using: composite
   steps:
@@ -19,5 +16,4 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
         OPENNEXT_BUILD_COMMAND: ${{ inputs.command }}
-        ALLOW_UNSUPPORTED_NEXT_VERSION: ${{ inputs.allow-unsupported-next-version }}
       run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/build-opennext.ts"

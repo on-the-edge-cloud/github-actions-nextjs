@@ -33,7 +33,6 @@ for (const command of ["deploy", "destroy"]) {
       "test-command": "",
       "build-command": "",
       "opennext-build-command": "",
-      "allow-unsupported-next-version": "true",
       "smoke-test-command": "",
       "aws-region": "eu-north-1",
       "deployment-type": "ssr",
@@ -215,7 +214,7 @@ for (const [name, app, command, message] of [
 
 test("read config preserves build and smoke test overrides", () => fixture(workspace => {
   writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
-    app: { directory: "app", "aws-region": "eu-north-1", "smoke-test-command": "npm run smoke", "opennext-build-command": "npm run custom:build", "allow-unsupported-next-version": true },
+    app: { directory: "app", "aws-region": "eu-north-1", "smoke-test-command": "npm run smoke", "opennext-build-command": "npm run custom:build" },
   }));
   const result = execute("read-config", {
     GITHUB_WORKSPACE: workspace,
@@ -227,7 +226,6 @@ test("read config preserves build and smoke test overrides", () => fixture(works
   assert.equal(result.status, 0, result.stderr);
   assert(readFileSync(join(workspace, "outputs"), "utf8").includes("smoke-test-command=npm run smoke\n"));
   assert(readFileSync(join(workspace, "outputs"), "utf8").includes("opennext-build-command=npm run custom:build\n"));
-  assert(readFileSync(join(workspace, "outputs"), "utf8").includes("allow-unsupported-next-version=true\n"));
 }));
 
 for (const command of ["deploy", "destroy"]) {
@@ -261,7 +259,6 @@ for (const command of ["deploy", "destroy"]) {
       "test-command": "npm test",
       "build-command": "",
       "opennext-build-command": "",
-      "allow-unsupported-next-version": "true",
       "smoke-test-command": "",
     });
     const inputs = Object.keys(config.app).map(name => name === "directory" ? "app-directory" : name === "slug" ? "app-slug" : name);

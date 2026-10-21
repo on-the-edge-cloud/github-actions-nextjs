@@ -111,7 +111,6 @@ jobs:
         with:
           working-directory: ${{ steps.config.outputs.app-directory }}
           command: ${{ steps.config.outputs.opennext-build-command }}
-          allow-unsupported-next-version: ${{ steps.config.outputs.allow-unsupported-next-version }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

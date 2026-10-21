@@ -6,6 +6,12 @@ import { resolveOpenNext } from "../build-opennext/build-opennext.js";
 import openNextConfig from "../build-opennext/open-next.config.js";
 import { actionsRoot, execute, fixture } from "./test-helpers.js";
 
+function installNext(workspace: string, version: string): void {
+  const nextDirectory = join(workspace, "app/node_modules/next");
+  mkdirSync(nextDirectory, { recursive: true });
+  writeFileSync(join(nextDirectory, "package.json"), JSON.stringify({ name: "next", version }));
+}
+
 test("OpenNext uses the platform package and configuration by default", () => fixture(workspace => {
   const build = resolveOpenNext(join(workspace, "app"));
   assert.equal(build.config, resolve(actionsRoot, "build-opennext/open-next.config.ts"));
@@ -23,6 +29,7 @@ for (const customConfig of [false, true]) {
     test(`OpenNext uses the client's ${entrypoint} package ${customConfig ? "and config" : "with platform config"}`, () => fixture(workspace => {
       const directory = join(workspace, "app");
       const packageDirectory = join(directory, "node_modules/@opennextjs/aws");
+      installNext(workspace, "16.4.1");
       mkdirSync(packageDirectory, { recursive: true });
       writeFileSync(join(directory, "package.json"), "{}");
       writeFileSync(join(packageDirectory, "package.json"), JSON.stringify({
@@ -35,7 +42,6 @@ for (const customConfig of [false, true]) {
         GITHUB_WORKSPACE: workspace,
         WORKING_DIRECTORY: "app",
         OPENNEXT_BUILD_COMMAND: "",
-        ALLOW_UNSUPPORTED_NEXT_VERSION: "false",
       });
       assert.equal(result.status, 0, result.stderr);
       const output = JSON.parse(result.stdout) as { cwd: string; args: string[] };
@@ -49,7 +55,29 @@ for (const customConfig of [false, true]) {
   }
 }
 
-test("OpenNext allows an unsupported Next.js version by default", () => fixture(workspace => {
+test("OpenNext rejects Next.js below the recommended minimum", () => fixture(workspace => {
+  installNext(workspace, "14.2.7");
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: "",
+  });
+  assert.notEqual(result.status, 0);
+  assert(result.stderr.includes("Next.js 14.2.7 is not supported. Install Next.js 16.4.1 or newer."));
+}));
+
+test("OpenNext requires Next.js to be installed", () => fixture(workspace => {
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: "",
+  });
+  assert.notEqual(result.status, 0);
+  assert(result.stderr.includes("Next.js 16.4.1 or newer must be installed in the application."));
+}));
+
+test("OpenNext accepts the recommended Next.js minimum without a bypass flag", () => fixture(workspace => {
+  installNext(workspace, "16.4.1");
   const directory = join(workspace, "app");
   const packageDirectory = join(directory, "node_modules/@opennextjs/aws");
   mkdirSync(packageDirectory, { recursive: true });
@@ -66,12 +94,11 @@ test("OpenNext allows an unsupported Next.js version by default", () => fixture(
   });
   assert.equal(result.status, 0, result.stderr);
   const args = JSON.parse(result.stdout) as string[];
-  const flagIndex = args.indexOf("--dangerously-use-unsupported-next-version");
-  assert.notEqual(flagIndex, -1);
-  assert.equal(args[flagIndex + 1], "true");
+  assert(!args.includes("--dangerously-use-unsupported-next-version"));
 }));
 
 test("OpenNext custom config requires a client dependency", () => fixture(workspace => {
+  installNext(workspace, "16.4.1");
   writeFileSync(join(workspace, "app/open-next.config.ts"), "export default { default: {} };");
   const result = execute("build-opennext", {
     GITHUB_WORKSPACE: workspace,
@@ -83,6 +110,7 @@ test("OpenNext custom config requires a client dependency", () => fixture(worksp
 }));
 
 test("OpenNext command override replaces the managed build", () => fixture(workspace => {
+  installNext(workspace, "16.4.1");
   writeFileSync(join(workspace, "app/open-next.config.ts"), "invalid custom configuration");
   const result = execute("build-opennext", {
     GITHUB_WORKSPACE: workspace,
@@ -94,6 +122,7 @@ test("OpenNext command override replaces the managed build", () => fixture(works
 }));
 
 test("OpenNext propagates override failures", () => fixture(workspace => {
+  installNext(workspace, "16.4.1");
   const result = execute("build-opennext", {
     GITHUB_WORKSPACE: workspace,
     WORKING_DIRECTORY: "app",

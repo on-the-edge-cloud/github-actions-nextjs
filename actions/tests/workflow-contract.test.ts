@@ -30,7 +30,6 @@ test("workflow callers match local action inputs and outputs", () => {
     const build = steps.find((step: { name: string }) => step.name === "Build OpenNext");
     assert.equal(build.uses, "./.platform/actions/build-opennext");
     assert.equal(build.with.command, "${{ steps.config.outputs.opennext-build-command }}");
-    assert.equal(build.with["allow-unsupported-next-version"], "${{ steps.config.outputs.allow-unsupported-next-version }}");
     assert.equal(build.with["working-directory"], "${{ steps.config.outputs.app-directory }}");
     const smoke = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/smoke-test");
     assert(smoke, `${kind} must run the platform smoke test`);
