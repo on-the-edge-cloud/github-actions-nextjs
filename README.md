@@ -52,7 +52,7 @@ Production runs only on `main` and uses the caller's `production` environment. P
 
 Pass `aws-region` directly in each caller workflow when no other settings need customization; this avoids creating a separate config file. Use the [complete example](examples/nextjs-app.yml) with `config-path` for application overrides. When both are provided, the workflow input `aws-region` takes precedence. Only the `app` mapping is supported in config files; the old `preview` section must be removed. The directory defaults to the repository root, the slug to the repository name, and deployment type to `ssr`. Commands and Node.js remain overridable; clients do not configure Terraform versions. The obsolete `workspace-prefix` output has been removed.
 
-Smoke tests run automatically after CloudFront invalidation. By default, SSR apps must expose `/ssr/`, `/api/health/`, and `/isr/` with timestamps and the expected cache headers; static apps are checked for HTTP 200 at `/`. Set `app.smoke-test-command` to override these checks, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL. Omit it or leave it empty to use the defaults.
+The smoke test step runs after CloudFront invalidation. It does nothing by default; set `app.smoke-test-command` to run a custom check, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL.
 
 OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. The default supports Next.js `>=15.5.28 <16 || >=16.4.1`. To customize it, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build entirely. Omit it or leave it empty to use the defaults.
 
@@ -66,7 +66,7 @@ The workflow skips fork pull requests. App commands are executed from the PR che
 
 ## Shared actions
 
-TypeScript actions in `actions/` handle application commands, OpenNext builds, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, smoke tests, and preview comments.
+TypeScript actions in `actions/` handle application commands, OpenNext builds, Terraform preparation, backend initialization, deployment outputs, CloudFront invalidation, optional smoke tests, and preview comments.
 
 ```bash
 npm ci --prefix actions

@@ -537,58 +537,28 @@ for (const command of ["false | true", "false; echo unexpected", 'echo "$MISSING
   }));
 }
 
-type SmokeScenario = {
-  name: string;
-  mode?: "ssr" | "static";
-  status?: number;
-  ssrCache?: string;
-  ssrStable?: boolean;
-  ssrHtml?: string;
-  healthStatus?: string;
-  healthTimestamp?: string;
-  healthCache?: string;
-  isrCache?: string;
-  isrChanges?: boolean;
-  failure?: string;
-};
+test("smoke test is skipped when no command is configured", () => {
+  const result = execute("smoke-test", { SMOKE_TEST_COMMAND: "" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /skipping/);
+});
 
-const smokeScenarios: SmokeScenario[] = [
-  { name: "SSR, API and ISR succeed" },
-  { name: "static checks only the home page", mode: "static" },
-  { name: "near ISR expiry allows revalidation", isrCache: "s-maxage=5", isrChanges: true },
-  { name: "non-200 response fails", status: 503, failure: "expected HTTP 200" },
-  { name: "static non-200 response fails", mode: "static", status: 503, failure: "expected HTTP 200" },
-  { name: "SSR must not be cached", ssrCache: "public, max-age=60", failure: "no-store|private" },
-  { name: "SSR timestamp must change", ssrStable: true, failure: "SSR must render on every request" },
-  { name: "SSR timestamp must exist", ssrHtml: "No timestamp", failure: "Expected a server-rendered timestamp" },
-  { name: "health status must be ok", healthStatus: "error", failure: "ok" },
-  { name: "health timestamp must be valid", healthTimestamp: "invalid", failure: "Expected a valid health timestamp" },
-  { name: "health must not be cached", healthCache: "public", failure: "no-store" },
-  { name: "ISR TTL must exist", isrCache: "public", failure: "Expected an ISR cache lifetime" },
-  { name: "ISR TTL must be at most 60", isrCache: "s-maxage=61", failure: "Expected ISR cache lifetime <= 60" },
-  { name: "ISR timestamp must stay cached", isrChanges: true, failure: "ISR must reuse the cached page" },
-];
-
-for (const mode of ["ssr", "static"]) {
-  test(`smoke test override replaces built-in ${mode} checks`, () => fixture(workspace => {
-    mkdirSync(join(workspace, "app with spaces"));
-    const result = execute("smoke-test", {
-      BASE_URL: "http://127.0.0.1:1",
-      DEPLOYMENT_TYPE: mode,
-      GITHUB_WORKSPACE: workspace,
-      WORKING_DIRECTORY: "app with spaces",
-      SMOKE_TEST_COMMAND: 'printf "%s\\n%s\\n%s\\n%s" "$PWD" "$PREVIEW_URL" "$PRODUCTION_URL" "$BASE_URL"',
-    });
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout, `${join(workspace, "app with spaces")}\nhttp://127.0.0.1:1\nhttp://127.0.0.1:1\nhttp://127.0.0.1:1`);
-  }));
-}
+test("smoke test command runs in the app directory with deployment URLs", () => fixture(workspace => {
+  mkdirSync(join(workspace, "app with spaces"));
+  const result = execute("smoke-test", {
+    BASE_URL: "http://127.0.0.1:1",
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app with spaces",
+    SMOKE_TEST_COMMAND: 'printf "%s\\n%s\\n%s\\n%s" "$PWD" "$PREVIEW_URL" "$PRODUCTION_URL" "$BASE_URL"',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `${join(workspace, "app with spaces")}\nhttp://127.0.0.1:1\nhttp://127.0.0.1:1\nhttp://127.0.0.1:1`);
+}));
 
 for (const command of ["false | true", "false; echo unexpected", "exit 7"]) {
   test(`smoke test override propagates failure: ${command}`, () => fixture(workspace => {
     const result = execute("smoke-test", {
       BASE_URL: "http://127.0.0.1:1",
-      DEPLOYMENT_TYPE: "ssr",
       GITHUB_WORKSPACE: workspace,
       WORKING_DIRECTORY: "app",
       SMOKE_TEST_COMMAND: command,
@@ -597,62 +567,6 @@ for (const command of ["false | true", "false; echo unexpected", "exit 7"]) {
     assert(!result.stdout.includes("unexpected"));
     if (command === "exit 7") assert.equal(result.status, 7);
   }));
-}
-
-for (const scenario of smokeScenarios) {
-  test(`smoke test: ${scenario.name}`, async () => {
-    const requests: string[] = [];
-    let ssrRequests = 0;
-    let isrRequests = 0;
-    const firstTimestamp = "2026-10-20T12:00:00.000Z";
-    const secondTimestamp = "2026-10-20T12:00:01.000Z";
-    const server = createServer((request, response) => {
-      requests.push(request.url ?? "");
-      response.statusCode = scenario.status ?? 200;
-      if (request.url === "/ssr/") {
-        ssrRequests++;
-        response.setHeader("Cache-Control", scenario.ssrCache ?? "private, no-store");
-        response.end(scenario.ssrHtml ?? (ssrRequests === 1 || scenario.ssrStable ? firstTimestamp : secondTimestamp));
-      } else if (request.url === "/api/health/") {
-        response.setHeader("Cache-Control", scenario.healthCache ?? "no-store");
-        response.setHeader("Content-Type", "application/json");
-        response.end(JSON.stringify({ status: scenario.healthStatus ?? "ok", timestamp: scenario.healthTimestamp ?? firstTimestamp }));
-      } else if (request.url === "/isr/") {
-        isrRequests++;
-        response.setHeader("Cache-Control", scenario.isrCache ?? "public, s-maxage=60");
-        response.end(isrRequests === 1 || !scenario.isrChanges ? firstTimestamp : secondTimestamp);
-      } else {
-        response.end("Static application");
-      }
-    });
-    server.listen(0, "127.0.0.1");
-    try {
-      await once(server, "listening");
-      const address = server.address();
-      assert(address && typeof address !== "string");
-      const child = spawn(process.execPath, [resolve(actionsRoot, "run.mjs"), resolve(actionsRoot, "smoke-test/smoke-test.ts")], {
-        env: { ...process.env, BASE_URL: `http://127.0.0.1:${address.port}`, DEPLOYMENT_TYPE: scenario.mode ?? "ssr", SMOKE_TEST_COMMAND: "" },
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", chunk => { stdout += chunk; });
-      child.stderr.on("data", chunk => { stderr += chunk; });
-      const [status] = await once(child, "close");
-      if (scenario.failure) {
-        assert.notEqual(status, 0);
-        assert(stderr.includes(scenario.failure), stderr);
-      } else {
-        assert.equal(status, 0, stderr);
-        assert(stdout.includes(scenario.mode === "static" ? "Static smoke check passed" : "SSR, API and ISR cache smoke checks passed"));
-        assert.deepEqual(requests, scenario.mode === "static" ? ["/"] : ["/ssr/", "/ssr/", "/api/health/", "/isr/", "/isr/"]);
-        if (scenario.isrCache === "s-maxage=5") assert(stdout.includes("skipped timestamp stability check"));
-      }
-    } finally {
-      server.closeAllConnections();
-      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-    }
-  });
 }
 
 for (const existing of [false, true]) {
@@ -717,7 +631,6 @@ test("workflow callers match local action inputs and outputs", () => {
     const smoke = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/smoke-test");
     assert(smoke, `${kind} must run the platform smoke test`);
     assert.equal(smoke.with.url, `\${{ steps.${kind}.outputs.url }}`);
-    assert.equal(smoke.with["deployment-type"], "${{ steps.config.outputs.deployment-type }}");
     assert.equal(smoke.with.command, "${{ steps.config.outputs.smoke-test-command }}");
     assert.equal(smoke.with["working-directory"], "${{ steps.config.outputs.app-directory }}");
     assert(steps.indexOf(smoke) > steps.findIndex((step: { name: string }) => step.name === "Invalidate CloudFront"));

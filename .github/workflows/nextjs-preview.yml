@@ -169,7 +169,6 @@ jobs:
         uses: ./.platform/actions/smoke-test
         with:
           url: ${{ steps.preview.outputs.url }}
-          deployment-type: ${{ steps.config.outputs.deployment-type }}
           command: ${{ steps.config.outputs.smoke-test-command }}
           working-directory: ${{ steps.config.outputs.app-directory }}
 
