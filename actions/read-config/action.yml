@@ -55,9 +55,6 @@ outputs:
   domain:
     description: Optional production CloudFront hostname.
     value: ${{ steps.config.outputs.domain }}
-  acm-certificate-arn:
-    description: Optional issued ACM certificate in us-east-1 covering the production domain.
-    value: ${{ steps.config.outputs.acm-certificate-arn }}
 
 runs:
   using: composite

@@ -65,13 +65,26 @@ test("workflow callers match local action inputs and outputs", () => {
     const platform = steps.find((step: { with?: { repository?: string } }) => step.with?.repository === "on-the-edge-cloud/github-actions-nextjs");
     const module = steps.find((step: { with?: { repository?: string } }) => step.with?.repository === "on-the-edge-cloud/terraform-aws-nextjs");
     assert.equal(platform.with.ref, "main");
-    assert.equal(module.with.ref, "v1.4.2");
+    assert.equal(module.with.ref, "v1.4.3");
     const prepare = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/prepare-terraform");
-    for (const name of ["domain", "acm-certificate-arn"]) {
+    for (const name of ["domain"]) {
       assert.equal(prepare.with[name], kind === "production" ? `\${{ steps.config.outputs.${name} }}` : undefined);
       const action = parseDocument(readFileSync(resolve(actionsRoot, "prepare-terraform/action.yml"), "utf8")).toJS();
-      const environmentName = name === "domain" ? "DOMAIN" : "ACM_CERTIFICATE_ARN";
+      const environmentName = "DOMAIN";
       assert.equal(action.runs.steps[0].env[environmentName], `\${{ inputs.${name} }}`);
+    }
+    if (kind === "production") {
+      assert.equal(workflow.on.workflow_call.secrets.CLOUDFLARE_API_TOKEN.required, false);
+      const terraformSteps = steps.filter((step: { name: string }) => [
+        "Initialize Terraform without backend", "Validate Terraform", "Initialize Terraform backend", "Plan production", "Deploy production",
+      ].includes(step.name));
+      assert.equal(terraformSteps.length, 5);
+      for (const step of terraformSteps) {
+        assert.equal(step.env.CLOUDFLARE_API_TOKEN, "${{ secrets.CLOUDFLARE_API_TOKEN }}");
+      }
+    } else {
+      assert.equal(workflow.on.workflow_call.secrets.CLOUDFLARE_API_TOKEN, undefined);
+      assert(!JSON.stringify(workflow).includes("CLOUDFLARE_API_TOKEN"));
     }
     assert(!Object.hasOwn(workflow.on.workflow_call.inputs, "platform-ref"));
     if (kind === "production") {

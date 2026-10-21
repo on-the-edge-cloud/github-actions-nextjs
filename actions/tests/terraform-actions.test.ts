@@ -27,7 +27,6 @@ for (const mode of ["ssr", "static"]) {
         assert(values.includes(`TF_VAR_pr_number=${pr}\n`));
         assert(values.includes("TF_VAR_app_slug=example\n"));
         assert(values.includes("TF_VAR_domain=\n"));
-        assert(values.includes("TF_VAR_acm_certificate_arn=\n"));
         assert(readFileSync(join(workspace, "summary"), "utf8").includes(pr ? "Preview workflow" : "Production workflow"));
       }));
     }
@@ -38,19 +37,17 @@ for (const mode of ["ssr", "static"]) {
   for (const pr of ["", "42"]) {
     for (const command of ["deploy", "destroy"]) {
       test(`prepare custom domain ${mode}/${pr || "production"}/${command}`, () => fixture(workspace => {
-        const certificateArn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012";
         const result = execute("prepare-terraform", {
           GITHUB_WORKSPACE: workspace,
           GITHUB_ENV: join(workspace, "env"),
           GITHUB_STEP_SUMMARY: join(workspace, "summary"),
           APP_DIRECTORY: "app", APP_SLUG: "example", AWS_REGION: "eu-north-1",
           DEPLOYMENT_TYPE: mode, PR_NUMBER: pr, COMMAND: command,
-          DOMAIN: "ontheedge.cloud", ACM_CERTIFICATE_ARN: certificateArn,
+          DOMAIN: "ontheedge.cloud",
         });
         assert.equal(result.status, 0, result.stderr);
         const values = readFileSync(join(workspace, "env"), "utf8");
         assert(values.includes(`TF_VAR_domain=${pr ? "" : "ontheedge.cloud"}\n`));
-        assert(values.includes(`TF_VAR_acm_certificate_arn=${pr ? "" : certificateArn}\n`));
       }));
     }
   }

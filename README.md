@@ -47,7 +47,7 @@ jobs:
     secrets: inherit
 ```
 
-Production runs only on `main` and uses the caller's `production` environment. Provide `AWS_ROLE_ARN` and allow `repo:OWNER/REPO:environment:production` in the AWS OIDC trust policy. The deployed URL is available as `needs.production.outputs.production-url`.
+Production runs only on `main` and uses the caller's `production` environment. Provide `AWS_ROLE_ARN` and allow `repo:OWNER/REPO:environment:production` in the AWS OIDC trust policy. For custom domains, add `CLOUDFLARE_API_TOKEN` as a secret in the `production` environment. The deployed URL is available as `needs.production.outputs.production-url`.
 
 ## Application config
 
@@ -75,21 +75,20 @@ Static deployments run the application's `build` script with npm or Yarn and dep
 
 ## Production custom domain
 
-Both `ssr` and `static` deployments support an optional production domain through Terraform module `v1.4.2`. Add these settings to the client configuration and pass `config-path: nextjs-app.yml` in the production caller workflow:
+Both `ssr` and `static` deployments support an optional production domain through Terraform module `v1.4.3`. Add these settings to the client configuration and pass `config-path: nextjs-app.yml` in the production caller workflow:
 
 ```yaml
 app:
   aws-region: "eu-north-1"
   deployment-type: "static" # Use "ssr" for OpenNext.
   domain: "ontheedge.cloud"
-  acm-certificate-arn: "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
 ```
 
-Set both `domain` and `acm-certificate-arn`, or omit both (empty strings also disable the custom domain). The domain must be a lowercase hostname without `https://`, a path, or a wildcard. The certificate must already be issued in **us-east-1** and cover that exact hostname. A wildcard certificate such as `*.ontheedge.cloud` does not cover the apex `ontheedge.cloud` unless the apex is also included. Request and DNS-validate the certificate in ACM before deploying; this repository does not create certificates or DNS records.
+Set `domain` to a lowercase hostname without `https://`, a path, or a wildcard; omit it or use an empty string to disable the custom domain. The workflow creates the ACM certificate in **us-east-1**, validates it through Cloudflare DNS, and attaches it to CloudFront. Set `CLOUDFLARE_API_TOKEN` in the caller's `production` environment with permission to list zones and edit DNS records. This token is available only to production Terraform steps; previews keep their default CloudFront URLs and do not need the token.
 
-The workflow passes the hostname and certificate to CloudFront as its alternate domain name and viewer certificate. These settings apply only to production; previews keep their default CloudFront URLs, even when sharing the same config file. Without these settings, existing deployment behavior is unchanged.
+These settings apply only to production, even when previews share the same config file. Without `domain`, deployment behavior is unchanged.
 
-Point the domain's DNS record at the deployed CloudFront hostname. With Cloudflare, keep ACM validation records DNS-only and use Full (strict) TLS for a proxied application record. Switching the application record to DNS-only does **not** remove the need for a CloudFront alias and matching certificate: the browser still sends the custom hostname. No bucket or bucket policy changes are needed. The workflow already invalidates CloudFront after deployment.
+After deployment, point the domain's DNS record at the CloudFront hostname. ACM validation records are created DNS-only. Cloudflare proxying for the application record is optional; when enabled, use Full (strict) TLS. No bucket or bucket policy changes are needed. The workflow already invalidates CloudFront after deployment.
 
 ## Terraform state
 

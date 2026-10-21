@@ -28,7 +28,6 @@ writeValues("GITHUB_ENV", {
   TF_VAR_pr_number: pr,
   TF_VAR_app_directory: appRoot,
   TF_VAR_domain: pr ? "" : process.env.DOMAIN ?? "",
-  TF_VAR_acm_certificate_arn: pr ? "" : process.env.ACM_CERTIFICATE_ARN ?? "",
 });
 
 const title = pr ? "Preview workflow" : "Production workflow";

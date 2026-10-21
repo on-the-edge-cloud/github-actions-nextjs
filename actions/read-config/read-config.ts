@@ -17,7 +17,6 @@ type AppConfig = {
     "aws-region"?: string;
     "deployment-type"?: "static" | "ssr";
     domain?: string;
-    "acm-certificate-arn"?: string;
   };
 };
 
@@ -89,15 +88,8 @@ if (deploymentType !== "static" && deploymentType !== "ssr") {
   throw new Error("app.deployment-type must be either static or ssr.");
 }
 const domain = config.app.domain ?? "";
-const certificateArn = config.app["acm-certificate-arn"] ?? "";
 if (typeof domain !== "string" || (domain !== "" && (domain.length > 253 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domain)))) {
   throw new Error("app.domain must be a lowercase hostname without a scheme, path or wildcard.");
-}
-if (typeof certificateArn !== "string" || (certificateArn !== "" && !/^arn:aws:acm:us-east-1:\d{12}:certificate\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(certificateArn))) {
-  throw new Error("app.acm-certificate-arn must be an ACM certificate ARN in us-east-1.");
-}
-if (Boolean(domain) !== Boolean(certificateArn)) {
-  throw new Error("app.domain and app.acm-certificate-arn must be configured together.");
 }
 const packagePath = resolve(appRoot, "package.json");
 const packageJson = existsSync(packagePath)
@@ -133,7 +125,6 @@ const outputs: Record<string, string> = {
   "aws-region": region,
   "deployment-type": deploymentType,
   domain,
-  "acm-certificate-arn": certificateArn,
 };
 
 for (const [name, value] of Object.entries(outputs)) {
