@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "tsx --test deployment.test.ts"
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@actions/github": "9.1.1",
