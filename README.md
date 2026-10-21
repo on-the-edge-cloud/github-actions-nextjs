@@ -14,7 +14,7 @@ on:
 
 jobs:
   preview:
-    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-preview.yml@v1.13
+    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-preview.yml@v1.14
     with:
       aws-region: eu-north-1
       command: ${{ github.event.action == 'closed' && 'destroy' || 'deploy' }}
@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   production:
-    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-production.yml@v1.13
+    uses: on-the-edge-cloud/github-actions-nextjs/.github/workflows/nextjs-production.yml@v1.14
     with:
       aws-region: eu-north-1
     secrets: inherit
