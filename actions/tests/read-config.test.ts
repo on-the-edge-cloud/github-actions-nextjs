@@ -58,7 +58,46 @@ test("read config uses a direct AWS region without a config file", () => fixture
   assert.equal(values["deployment-type"], "ssr");
 }));
 
+for (const [repository, expectedSlug] of [
+  ["on-the-edge-cloud/ontheedge.cloud", "ontheedge-cloud"],
+  ["owner/Example_APP", "example-app"],
+  ["owner/--Example...__App--", "example-app"],
+  ["owner/abcdefghijklmnopqrstuvwxyz", "abcdefghijklmnopqrstuvwx"],
+  ["owner/abcdefghijklmnopqrstuvw-nextjs", "abcdefghijklmnopqrstuvw"],
+] as const) {
+  for (const command of ["deploy", "destroy"]) {
+    test(`read config ${command} normalizes the repository slug for ${repository}`, () => fixture(workspace => {
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace,
+        GITHUB_REPOSITORY: repository,
+        GITHUB_OUTPUT: join(workspace, "outputs"),
+        AWS_REGION: "eu-north-1",
+        COMMAND: command,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert(readFileSync(join(workspace, "outputs"), "utf8").includes(`app-slug=${expectedSlug}\n`));
+    }));
+  }
+}
+
+test("read config preserves an explicit slug instead of normalizing the repository name", () => fixture(workspace => {
+  writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+    app: { slug: "custom-app", "aws-region": "eu-north-1" },
+  }));
+  const result = execute("read-config", {
+    GITHUB_WORKSPACE: workspace,
+    GITHUB_REPOSITORY: "on-the-edge-cloud/ontheedge.cloud",
+    GITHUB_OUTPUT: join(workspace, "outputs"),
+    CONFIG_PATH: "nextjs-app.yml",
+    COMMAND: "deploy",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert(readFileSync(join(workspace, "outputs"), "utf8").includes("app-slug=custom-app\n"));
+}));
+
 for (const [name, app, command, message] of [
+  ...["ontheedge.cloud", "Example-app", "example--app", "-app", "app-", "", "abcdefghijklmnopqrstuvwxyz"].map(slug =>
+    [`invalid explicit slug ${JSON.stringify(slug)}`, { slug, "aws-region": "eu-north-1" }, "deploy", "app.slug"] as const),
   ["invalid mode", { directory: "app", "aws-region": "eu-north-1", "deployment-type": "invalid" }, "deploy", "app.deployment-type"],
   ["directory traversal", { directory: "..", "aws-region": "eu-north-1" }, "deploy", "app.directory"],
   ["invalid command", { directory: "app", "aws-region": "eu-north-1" }, "invalid", "Command must be deploy or destroy"],

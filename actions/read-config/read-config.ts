@@ -69,7 +69,12 @@ if (isAbsolute(appRelativePath) || appRelativePath === ".." || appRelativePath.s
 }
 
 const repositoryName = process.env.GITHUB_REPOSITORY?.split("/").at(-1);
-const slug = config.app.slug ?? repositoryName;
+const slug = config.app.slug ?? repositoryName
+  ?.toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "")
+  .slice(0, 24)
+  .replace(/-+$/g, "");
 if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 24) {
   throw new Error("app.slug must use lowercase letters, digits and single hyphens, and be at most 24 characters.");
 }
