@@ -22,6 +22,12 @@ outputs:
   node-version:
     description: Node.js version used by the build.
     value: ${{ steps.config.outputs.node-version }}
+  package-manager:
+    description: Detected application package manager, npm or yarn.
+    value: ${{ steps.config.outputs.package-manager }}
+  cache-dependency-path:
+    description: Application lockfile path, or empty to disable dependency caching.
+    value: ${{ steps.config.outputs.cache-dependency-path }}
   install-command:
     description: Dependency installation command.
     value: ${{ steps.config.outputs.install-command }}

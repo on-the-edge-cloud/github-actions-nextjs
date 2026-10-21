@@ -12,6 +12,21 @@ test("workflow callers match local action inputs and outputs", () => {
     assert.deepEqual(document.errors, []);
     const workflow = document.toJS();
     const steps = workflow.jobs[kind].steps;
+    const node = steps.find((step: { name: string }) => step.name === "Setup Node.js");
+    assert.equal(node.with.cache, "${{ steps.config.outputs.cache-dependency-path != '' && steps.config.outputs.package-manager || '' }}");
+    assert.equal(node.with["cache-dependency-path"], "${{ steps.config.outputs.cache-dependency-path }}");
+    const corepack = steps.find((step: { name: string }) => step.name === "Enable Corepack");
+    const bootstrap = steps.find((step: { name: string }) => step.name === "Setup Node.js for Corepack");
+    assert.equal(bootstrap.uses, "actions/setup-node@v4");
+    assert.equal(bootstrap.with["node-version"], "${{ steps.config.outputs.node-version }}");
+    assert.equal(bootstrap.with.cache, undefined);
+    assert.equal(corepack.run, "corepack enable");
+    assert.equal(corepack["working-directory"], "${{ steps.config.outputs.app-directory }}");
+    for (const step of [bootstrap, corepack]) {
+      assert.equal(step.if, `${kind === "preview" ? "inputs.command == 'deploy' && " : ""}steps.config.outputs.package-manager == 'yarn'`);
+    }
+    assert(steps.indexOf(bootstrap) < steps.indexOf(corepack));
+    assert(steps.indexOf(corepack) < steps.indexOf(node));
     const build = steps.find((step: { name: string }) => step.name === "Build OpenNext");
     assert.equal(build.uses, "./.platform/actions/build-opennext");
     assert.equal(build.with.command, "${{ steps.config.outputs.opennext-build-command }}");

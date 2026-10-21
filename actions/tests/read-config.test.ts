@@ -26,6 +26,8 @@ for (const command of ["deploy", "destroy"]) {
       "app-directory": "app",
       "app-slug": "example-app",
       "node-version": "22",
+      "package-manager": "npm",
+      "cache-dependency-path": "",
       "install-command": "npm ci",
       "lint-command": "npm run lint",
       "test-command": "",
@@ -38,6 +40,58 @@ for (const command of ["deploy", "destroy"]) {
     });
   }));
 }
+
+for (const [name, packageManager, lockfile, lockContents, expectedManager, expectedInstall] of [
+  ["Yarn 4", "yarn@4.4.1", "yarn.lock", "", "yarn", "yarn install --immutable"],
+  ["Yarn Classic", "yarn@1.22.22", "yarn.lock", "", "yarn", "yarn install --frozen-lockfile"],
+  ["Yarn Classic lockfile", undefined, "yarn.lock", "# yarn lockfile v1\n", "yarn", "yarn install --frozen-lockfile"],
+  ["modern Yarn lockfile", undefined, "yarn.lock", "__metadata:\n  version: 8\n", "yarn", "yarn install --immutable"],
+  ["npm", "npm@10.9.9", "package-lock.json", "{}", "npm", "npm ci"],
+  ["Yarn without lockfile", "yarn@4.4.1", "", "", "yarn", "yarn install --immutable"],
+  ["npm without lockfile", undefined, "", "", "npm", "npm ci"],
+] as const) {
+test(`read config detects ${name} and uses its lockfile and commands`, () => fixture(workspace => {
+  if (lockfile) writeFileSync(join(workspace, "app", lockfile), lockContents);
+  writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager }));
+  writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+    app: { directory: "app", "aws-region": "eu-north-1" },
+  }));
+  const result = execute("read-config", {
+    GITHUB_WORKSPACE: workspace,
+    GITHUB_REPOSITORY: "owner/example-app",
+    GITHUB_OUTPUT: join(workspace, "outputs"),
+    CONFIG_PATH: "nextjs-app.yml",
+    COMMAND: "deploy",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const values = Object.fromEntries(readFileSync(join(workspace, "outputs"), "utf8").trim().split("\n").map(line => {
+    const position = line.indexOf("=");
+    return [line.slice(0, position), line.slice(position + 1)];
+  }));
+  assert.equal(values["package-manager"], expectedManager);
+  assert.equal(values["cache-dependency-path"], lockfile ? `app/${lockfile}` : "");
+  assert.equal(values["install-command"], expectedInstall);
+  assert.equal(values["lint-command"], `${expectedManager} run lint`);
+}));
+}
+
+test("read config preserves custom commands for Yarn", () => fixture(workspace => {
+  writeFileSync(join(workspace, "yarn.lock"), "");
+  writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+    app: { "aws-region": "eu-north-1", "install-command": "yarn install --inline-builds", "lint-command": "yarn lint:custom" },
+  }));
+  const result = execute("read-config", {
+    GITHUB_WORKSPACE: workspace,
+    GITHUB_REPOSITORY: "owner/example-app",
+    GITHUB_OUTPUT: join(workspace, "outputs"),
+    CONFIG_PATH: "nextjs-app.yml",
+    COMMAND: "deploy",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const outputs = readFileSync(join(workspace, "outputs"), "utf8");
+  assert(outputs.includes("install-command=yarn install --inline-builds\n"));
+  assert(outputs.includes("lint-command=yarn lint:custom\n"));
+}));
 
 test("read config uses a direct AWS region without a config file", () => fixture(workspace => {
   const result = execute("read-config", {
@@ -157,6 +211,8 @@ for (const command of ["deploy", "destroy"]) {
       "aws-region": "eu-north-1",
       "deployment-type": "ssr",
       "node-version": "22",
+      "package-manager": "npm",
+      "cache-dependency-path": "",
       "install-command": "npm ci",
       "lint-command": "npm run lint",
       "test-command": "npm test",
@@ -166,7 +222,7 @@ for (const command of ["deploy", "destroy"]) {
       "smoke-test-command": "",
     });
     const inputs = Object.keys(config.app).map(name => name === "directory" ? "app-directory" : name === "slug" ? "app-slug" : name);
-    assert.deepEqual(inputs.sort(), Object.keys(values).sort());
+    assert.deepEqual(inputs.sort(), Object.keys(values).filter(name => !["package-manager", "cache-dependency-path"].includes(name)).sort());
   }));
 }
 

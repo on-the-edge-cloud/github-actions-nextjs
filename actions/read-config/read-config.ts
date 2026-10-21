@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { parseDocument } from "yaml";
 import { writeValues } from "../lib.js";
@@ -92,12 +92,28 @@ if (typeof allowUnsupportedNextVersion !== "boolean") {
   throw new Error("app.allow-unsupported-next-version must be a boolean.");
 }
 
+const packagePath = resolve(appRoot, "package.json");
+const packageManagerVersion: unknown = existsSync(packagePath)
+  ? JSON.parse(readFileSync(packagePath, "utf8")).packageManager
+  : undefined;
+const yarnLockPath = resolve(appRoot, "yarn.lock");
+const packageManager = typeof packageManagerVersion === "string"
+  ? (packageManagerVersion.startsWith("yarn@") ? "yarn" : "npm")
+  : (existsSync(yarnLockPath) ? "yarn" : "npm");
+const lockfile = packageManager === "yarn" ? "yarn.lock" : "package-lock.json";
+const modernYarn = packageManager === "yarn" && (typeof packageManagerVersion === "string"
+  ? !packageManagerVersion.startsWith("yarn@1.")
+  : existsSync(resolve(appRoot, ".yarnrc.yml")) || /(?:^|\n)__metadata:/.test(readFileSync(yarnLockPath, "utf8")));
+
 const outputs: Record<string, string> = {
   "app-directory": appDirectory,
   "app-slug": slug,
   "node-version": config.app["node-version"] ?? "22",
-  "install-command": config.app["install-command"] ?? "npm ci",
-  "lint-command": config.app["lint-command"] ?? "npm run lint",
+  "package-manager": packageManager,
+  "cache-dependency-path": existsSync(resolve(appRoot, lockfile)) ? `${appDirectory}/${lockfile}` : "",
+  "install-command": config.app["install-command"] ?? (packageManager === "yarn"
+    ? `yarn install --${modernYarn ? "immutable" : "frozen-lockfile"}` : "npm ci"),
+  "lint-command": config.app["lint-command"] ?? `${packageManager} run lint`,
   "test-command": config.app["test-command"] ?? "",
   "build-command": config.app["build-command"] ?? "",
   "opennext-build-command": config.app["opennext-build-command"] ?? "",
