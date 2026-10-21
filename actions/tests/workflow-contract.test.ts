@@ -65,7 +65,14 @@ test("workflow callers match local action inputs and outputs", () => {
     const platform = steps.find((step: { with?: { repository?: string } }) => step.with?.repository === "on-the-edge-cloud/github-actions-nextjs");
     const module = steps.find((step: { with?: { repository?: string } }) => step.with?.repository === "on-the-edge-cloud/terraform-aws-nextjs");
     assert.equal(platform.with.ref, "main");
-    assert.equal(module.with.ref, "v1.4");
+    assert.equal(module.with.ref, "v1.4.2");
+    const prepare = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/prepare-terraform");
+    for (const name of ["domain", "acm-certificate-arn"]) {
+      assert.equal(prepare.with[name], kind === "production" ? `\${{ steps.config.outputs.${name} }}` : undefined);
+      const action = parseDocument(readFileSync(resolve(actionsRoot, "prepare-terraform/action.yml"), "utf8")).toJS();
+      const environmentName = name === "domain" ? "DOMAIN" : "ACM_CERTIFICATE_ARN";
+      assert.equal(action.runs.steps[0].env[environmentName], `\${{ inputs.${name} }}`);
+    }
     assert(!Object.hasOwn(workflow.on.workflow_call.inputs, "platform-ref"));
     if (kind === "production") {
       assert.equal(workflow.jobs.production.outputs["production-url"], "${{ steps.production.outputs.url }}");

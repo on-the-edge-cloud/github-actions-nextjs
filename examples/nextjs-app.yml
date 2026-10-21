@@ -4,6 +4,8 @@ app:
   node-version: "22"
   aws-region: "eu-north-1"
   deployment-type: "ssr"
+  domain: ""
+  acm-certificate-arn: ""
   install-command: "npm ci"
   lint-command: "npm run lint"
   test-command: "npm test"

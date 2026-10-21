@@ -73,6 +73,24 @@ app:
 
 Static deployments run the application's `build` script with npm or Yarn and deploy the exported `out/` directory without running OpenNext. Keep `output: "export"` in the Next.js configuration. Set `app.build-command` to replace the static build command; an explicit empty string skips that build. The default deployment type remains `ssr`, which requires a standalone build rather than a static export.
 
+## Production custom domain
+
+Both `ssr` and `static` deployments support an optional production domain through Terraform module `v1.4.2`. Add these settings to the client configuration and pass `config-path: nextjs-app.yml` in the production caller workflow:
+
+```yaml
+app:
+  aws-region: "eu-north-1"
+  deployment-type: "static" # Use "ssr" for OpenNext.
+  domain: "ontheedge.cloud"
+  acm-certificate-arn: "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+```
+
+Set both `domain` and `acm-certificate-arn`, or omit both (empty strings also disable the custom domain). The domain must be a lowercase hostname without `https://`, a path, or a wildcard. The certificate must already be issued in **us-east-1** and cover that exact hostname. A wildcard certificate such as `*.ontheedge.cloud` does not cover the apex `ontheedge.cloud` unless the apex is also included. Request and DNS-validate the certificate in ACM before deploying; this repository does not create certificates or DNS records.
+
+The workflow passes the hostname and certificate to CloudFront as its alternate domain name and viewer certificate. These settings apply only to production; previews keep their default CloudFront URLs, even when sharing the same config file. Without these settings, existing deployment behavior is unchanged.
+
+Point the domain's DNS record at the deployed CloudFront hostname. With Cloudflare, keep ACM validation records DNS-only and use Full (strict) TLS for a proxied application record. Switching the application record to DNS-only does **not** remove the need for a CloudFront alias and matching certificate: the browser still sends the custom hostname. No bucket or bucket policy changes are needed. The workflow already invalidates CloudFront after deployment.
+
 ## Terraform state
 
 State is isolated by repository, hosting mode, and PR or production. The AWS role needs access to the S3 state and lock files. Existing infrastructure requires state migration before deploy or destroy; migration is not automatic. Back up the old state, reconcile resource addresses with the new module, and review the plan before applying.

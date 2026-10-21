@@ -14,6 +14,12 @@ inputs:
   aws-region:
     description: Application AWS region.
     required: true
+  domain:
+    description: Optional production CloudFront hostname. Ignored for previews.
+    default: ""
+  acm-certificate-arn:
+    description: Issued ACM certificate in us-east-1 covering domain. Ignored for previews.
+    default: ""
   pr-number:
     description: PR number, empty for production.
     default: ""
@@ -30,6 +36,8 @@ runs:
         APP_SLUG: ${{ inputs.app-slug }}
         DEPLOYMENT_TYPE: ${{ inputs.deployment-type }}
         AWS_REGION: ${{ inputs.aws-region }}
+        DOMAIN: ${{ inputs.domain }}
+        ACM_CERTIFICATE_ARN: ${{ inputs.acm-certificate-arn }}
         PR_NUMBER: ${{ inputs.pr-number }}
         COMMAND: ${{ inputs.command }}
       run: node "$ACTION_PATH/../run.mjs" "$ACTION_PATH/prepare-terraform.ts"

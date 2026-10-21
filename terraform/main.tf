@@ -53,6 +53,18 @@ variable "app_directory" {
   default = ""
 }
 
+variable "domain" {
+  description = "Optional production CloudFront hostname. Ignored for previews."
+  type        = string
+  default     = ""
+}
+
+variable "acm_certificate_arn" {
+  description = "Issued ACM certificate in us-east-1 covering domain. Ignored for previews."
+  type        = string
+  default     = ""
+}
+
 variable "deploy_artifacts" {
   description = "Set false for destroy so Terraform does not require the local build."
   type        = bool
@@ -66,11 +78,13 @@ locals {
 module "nextjs" {
   source = "../../.terraform-modules/modules/nextjs-deployment"
 
-  app_slug         = var.app_slug
-  app_directory    = local.app_directory
-  deployment_type  = var.deployment_type
-  pr_number        = var.pr_number
-  deploy_artifacts = var.deploy_artifacts
+  app_slug            = var.app_slug
+  app_directory       = local.app_directory
+  deployment_type     = var.deployment_type
+  pr_number           = var.pr_number
+  deploy_artifacts    = var.deploy_artifacts
+  domain              = var.pr_number == "" && var.domain != "" ? var.domain : null
+  acm_certificate_arn = var.pr_number == "" && var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
 }
 
 output "preview_url" {

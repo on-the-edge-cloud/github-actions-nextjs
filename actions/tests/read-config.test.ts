@@ -36,6 +36,8 @@ for (const command of ["deploy", "destroy"]) {
       "smoke-test-command": "",
       "aws-region": "eu-north-1",
       "deployment-type": "ssr",
+      domain: "",
+      "acm-certificate-arn": "",
     });
   }));
 }
@@ -282,9 +284,53 @@ for (const command of ["deploy", "destroy"]) {
       "build-command": "",
       "opennext-build-command": "",
       "smoke-test-command": "",
+      domain: "",
+      "acm-certificate-arn": "",
     });
     const inputs = Object.keys(config.app).map(name => name === "directory" ? "app-directory" : name === "slug" ? "app-slug" : name);
     assert.deepEqual(inputs.sort(), Object.keys(values).filter(name => !["package-manager", "cache-dependency-path"].includes(name)).sort());
+  }));
+}
+
+const certificateArn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012";
+for (const mode of ["ssr", "static"]) {
+  for (const command of ["deploy", "destroy"]) {
+    test(`read config custom domain ${mode}/${command}`, () => fixture(workspace => {
+      writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+        app: { "aws-region": "eu-north-1", "deployment-type": mode, domain: "ontheedge.cloud", "acm-certificate-arn": certificateArn },
+      }));
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace, GITHUB_REPOSITORY: "owner/app", GITHUB_OUTPUT: join(workspace, "outputs"),
+        CONFIG_PATH: "nextjs-app.yml", COMMAND: command,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const outputs = readFileSync(join(workspace, "outputs"), "utf8");
+      assert(outputs.includes("domain=ontheedge.cloud\n"));
+      assert(outputs.includes(`acm-certificate-arn=${certificateArn}\n`));
+    }));
+  }
+}
+
+for (const [domain, arn, message] of [
+  ["ontheedge.cloud", "", "configured together"],
+  ["", certificateArn, "configured together"],
+  ["https://ontheedge.cloud", certificateArn, "app.domain"],
+  ["*.ontheedge.cloud", certificateArn, "app.domain"],
+  ["ontheedge.cloud\nINJECTED=value", certificateArn, "app.domain"],
+  [42, certificateArn, "app.domain"],
+  ["ontheedge.cloud", 42, "app.acm-certificate-arn"],
+  ["ontheedge.cloud", certificateArn.replace("us-east-1", "eu-north-1"), "us-east-1"],
+] as const) {
+  test(`read config rejects domain configuration ${JSON.stringify([domain, arn])}`, () => fixture(workspace => {
+    writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+      app: { "aws-region": "eu-north-1", domain, "acm-certificate-arn": arn },
+    }));
+    const result = execute("read-config", {
+      GITHUB_WORKSPACE: workspace, GITHUB_REPOSITORY: "owner/app", GITHUB_OUTPUT: join(workspace, "outputs"),
+      CONFIG_PATH: "nextjs-app.yml", COMMAND: "deploy",
+    });
+    assert.notEqual(result.status, 0);
+    assert(result.stderr.includes(message), result.stderr);
   }));
 }
 

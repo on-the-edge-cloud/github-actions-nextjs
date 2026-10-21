@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: on-the-edge-cloud/terraform-aws-nextjs
-          ref: v1.4
+          ref: v1.4.2
           path: .terraform-modules
 
       - name: Setup Node.js for Corepack
@@ -131,6 +131,8 @@ jobs:
           app-slug: ${{ steps.config.outputs.app-slug }}
           deployment-type: ${{ steps.config.outputs.deployment-type }}
           aws-region: ${{ steps.config.outputs.aws-region }}
+          domain: ${{ steps.config.outputs.domain }}
+          acm-certificate-arn: ${{ steps.config.outputs.acm-certificate-arn }}
 
       - name: Format Terraform
         run: terraform -chdir="$TERRAFORM_ROOT" fmt -check -recursive
