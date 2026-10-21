@@ -45,7 +45,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const build = resolveOpenNext(directory);
     const args = [build.cli, "build", "--config-path", relative(directory, build.config)];
     if (process.env.ALLOW_UNSUPPORTED_NEXT_VERSION !== "false") {
-      args.push("--dangerously-use-unsupported-next-version");
+      args.push("--dangerously-use-unsupported-next-version", "true");
     }
     execute(process.execPath, args, directory);
   }

@@ -65,7 +65,10 @@ test("OpenNext allows an unsupported Next.js version by default", () => fixture(
     OPENNEXT_BUILD_COMMAND: "",
   });
   assert.equal(result.status, 0, result.stderr);
-  assert(JSON.parse(result.stdout).includes("--dangerously-use-unsupported-next-version"));
+  const args = JSON.parse(result.stdout) as string[];
+  const flagIndex = args.indexOf("--dangerously-use-unsupported-next-version");
+  assert.notEqual(flagIndex, -1);
+  assert.equal(args[flagIndex + 1], "true");
 }));
 
 test("OpenNext custom config requires a client dependency", () => fixture(workspace => {
