@@ -37,6 +37,9 @@ outputs:
   opennext-build-command:
     description: Optional override for the platform OpenNext build.
     value: ${{ steps.config.outputs.opennext-build-command }}
+  allow-unsupported-next-version:
+    description: Whether to proceed with an unsupported Next.js version.
+    value: ${{ steps.config.outputs.allow-unsupported-next-version }}
   smoke-test-command:
     description: Optional custom smoke test command. Empty disables the smoke test.
     value: ${{ steps.config.outputs.smoke-test-command }}

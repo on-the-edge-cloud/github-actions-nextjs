@@ -1,3 +1,4 @@
+OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. Its peer compatibility range is Next.js `>=15.5.28 <16 || >=16.4.1`, which does not guarantee that every version is still supported by the Next.js team. To customize OpenNext, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build entirely. Omit it or leave it empty to use the defaults. The managed build proceeds when Next.js reports an unsupported version; set `app.allow-unsupported-next-version: false` to restore OpenNext's support check and fail the build. Upgrade Next.js to a supported release when possible, since unsupported versions may have unpatched security vulnerabilities.
 # github-actions-nextjs
 
 Reusable GitHub Actions workflows for deploying Next.js applications to AWS with OpenNext.
@@ -54,7 +55,7 @@ Pass `aws-region` directly in each caller workflow when no other settings need c
 
 The smoke test step runs after CloudFront invalidation. It does nothing by default; set `app.smoke-test-command` to run a custom check, for example `npm run smoke`. The command runs in the app directory with `PREVIEW_URL`, `PRODUCTION_URL`, and `BASE_URL` set to the deployed URL.
 
-OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. The default supports Next.js `>=15.5.28 <16 || >=16.4.1`. To customize it, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build entirely. Omit it or leave it empty to use the defaults.
+OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. Its peer compatibility range is Next.js `>=15.5.28 <16 || >=16.4.1`, which does not guarantee that every version is still supported by the Next.js team. To customize OpenNext, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build entirely. Omit it or leave it empty to use the defaults. Upgrade Next.js to a supported release when possible; `app.allow-unsupported-next-version: true` explicitly bypasses OpenNext's support check and may deploy a version with unpatched security vulnerabilities.
 
 ## Terraform state
 

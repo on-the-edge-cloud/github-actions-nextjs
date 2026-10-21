@@ -43,6 +43,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     execute("bash", ["-euo", "pipefail", "-c", command], directory);
   } else {
     const build = resolveOpenNext(directory);
-    execute(process.execPath, [build.cli, "build", "--config-path", relative(directory, build.config)], directory);
+    const args = [build.cli, "build", "--config-path", relative(directory, build.config)];
+    if (process.env.ALLOW_UNSUPPORTED_NEXT_VERSION !== "false") {
+      args.push("--dangerously-use-unsupported-next-version");
+    }
+    execute(process.execPath, args, directory);
   }
 }

@@ -35,17 +35,38 @@ for (const customConfig of [false, true]) {
         GITHUB_WORKSPACE: workspace,
         WORKING_DIRECTORY: "app",
         OPENNEXT_BUILD_COMMAND: "",
+        ALLOW_UNSUPPORTED_NEXT_VERSION: "false",
       });
       assert.equal(result.status, 0, result.stderr);
       const output = JSON.parse(result.stdout) as { cwd: string; args: string[] };
       assert.equal(output.cwd, directory);
       assert.deepEqual(output.args.slice(0, 2), ["build", "--config-path"]);
+      assert(!output.args.includes("--dangerously-use-unsupported-next-version"));
       assert.equal(resolve(directory, output.args[2]), customConfig
         ? join(directory, "open-next.config.ts")
         : resolve(actionsRoot, "build-opennext/open-next.config.ts"));
     }));
   }
 }
+
+test("OpenNext allows an unsupported Next.js version by default", () => fixture(workspace => {
+  const directory = join(workspace, "app");
+  const packageDirectory = join(directory, "node_modules/@opennextjs/aws");
+  mkdirSync(packageDirectory, { recursive: true });
+  writeFileSync(join(directory, "package.json"), "{}");
+  writeFileSync(join(packageDirectory, "package.json"), JSON.stringify({
+    name: "@opennextjs/aws",
+    exports: { "./index.js": "./cli.cjs" },
+  }));
+  writeFileSync(join(packageDirectory, "cli.cjs"), 'process.stdout.write(JSON.stringify(process.argv.slice(2)));');
+  const result = execute("build-opennext", {
+    GITHUB_WORKSPACE: workspace,
+    WORKING_DIRECTORY: "app",
+    OPENNEXT_BUILD_COMMAND: "",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert(JSON.parse(result.stdout).includes("--dangerously-use-unsupported-next-version"));
+}));
 
 test("OpenNext custom config requires a client dependency", () => fixture(workspace => {
   writeFileSync(join(workspace, "app/open-next.config.ts"), "export default { default: {} };");

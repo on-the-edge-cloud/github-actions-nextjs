@@ -13,6 +13,7 @@ type AppConfig = {
     "test-command"?: string;
     "build-command"?: string;
     "opennext-build-command"?: string;
+    "allow-unsupported-next-version"?: boolean;
     "smoke-test-command"?: string;
     "aws-region"?: string;
     "deployment-type"?: "static" | "ssr";
@@ -81,6 +82,10 @@ const deploymentType = config.app["deployment-type"] ?? "ssr";
 if (deploymentType !== "static" && deploymentType !== "ssr") {
   throw new Error("app.deployment-type must be either static or ssr.");
 }
+const allowUnsupportedNextVersion = config.app["allow-unsupported-next-version"] ?? true;
+if (typeof allowUnsupportedNextVersion !== "boolean") {
+  throw new Error("app.allow-unsupported-next-version must be a boolean.");
+}
 
 const outputs: Record<string, string> = {
   "app-directory": appDirectory,
@@ -91,6 +96,7 @@ const outputs: Record<string, string> = {
   "test-command": config.app["test-command"] ?? "",
   "build-command": config.app["build-command"] ?? "",
   "opennext-build-command": config.app["opennext-build-command"] ?? "",
+  "allow-unsupported-next-version": String(allowUnsupportedNextVersion),
   "smoke-test-command": config.app["smoke-test-command"] ?? "",
   "aws-region": region,
   "deployment-type": deploymentType,
