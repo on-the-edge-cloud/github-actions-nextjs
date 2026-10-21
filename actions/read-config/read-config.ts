@@ -93,9 +93,14 @@ if (typeof allowUnsupportedNextVersion !== "boolean") {
 }
 
 const packagePath = resolve(appRoot, "package.json");
-const packageManagerVersion: unknown = existsSync(packagePath)
-  ? JSON.parse(readFileSync(packagePath, "utf8")).packageManager
-  : undefined;
+const packageJson = existsSync(packagePath)
+  ? JSON.parse(readFileSync(packagePath, "utf8")) as { packageManager?: unknown; scripts?: Record<string, unknown> }
+  : {};
+const packageManagerVersion = packageJson.packageManager;
+const scriptCommand = (name: string): string => {
+  const script = packageJson.scripts?.[name];
+  return typeof script === "string" && script.trim() ? `${packageManager} run ${name}` : "";
+};
 const yarnLockPath = resolve(appRoot, "yarn.lock");
 const packageManager = typeof packageManagerVersion === "string"
   ? (packageManagerVersion.startsWith("yarn@") ? "yarn" : "npm")
@@ -113,8 +118,8 @@ const outputs: Record<string, string> = {
   "cache-dependency-path": existsSync(resolve(appRoot, lockfile)) ? `${appDirectory}/${lockfile}` : "",
   "install-command": config.app["install-command"] ?? (packageManager === "yarn"
     ? `yarn install --${modernYarn ? "immutable" : "frozen-lockfile"}` : "npm ci"),
-  "lint-command": config.app["lint-command"] ?? `${packageManager} run lint`,
-  "test-command": config.app["test-command"] ?? "",
+  "lint-command": config.app["lint-command"] ?? scriptCommand("lint"),
+  "test-command": config.app["test-command"] ?? scriptCommand("test"),
   "build-command": config.app["build-command"] ?? "",
   "opennext-build-command": config.app["opennext-build-command"] ?? "",
   "allow-unsupported-next-version": String(allowUnsupportedNextVersion),

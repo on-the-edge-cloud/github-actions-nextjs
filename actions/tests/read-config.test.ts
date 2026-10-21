@@ -29,7 +29,7 @@ for (const command of ["deploy", "destroy"]) {
       "package-manager": "npm",
       "cache-dependency-path": "",
       "install-command": "npm ci",
-      "lint-command": "npm run lint",
+      "lint-command": "",
       "test-command": "",
       "build-command": "",
       "opennext-build-command": "",
@@ -52,7 +52,7 @@ for (const [name, packageManager, lockfile, lockContents, expectedManager, expec
 ] as const) {
 test(`read config detects ${name} and uses its lockfile and commands`, () => fixture(workspace => {
   if (lockfile) writeFileSync(join(workspace, "app", lockfile), lockContents);
-  writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager }));
+  writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager, scripts: { lint: "eslint .", test: "node --test" } }));
   writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
     app: { directory: "app", "aws-region": "eu-north-1" },
   }));
@@ -72,7 +72,50 @@ test(`read config detects ${name} and uses its lockfile and commands`, () => fix
   assert.equal(values["cache-dependency-path"], lockfile ? `app/${lockfile}` : "");
   assert.equal(values["install-command"], expectedInstall);
   assert.equal(values["lint-command"], `${expectedManager} run lint`);
+  assert.equal(values["test-command"], `${expectedManager} run test`);
 }));
+}
+
+for (const packageManager of ["npm@10.9.9", "yarn@4.4.1"]) {
+  for (const scripts of [{ build: "next build" }, { lint: "eslint ." }, { test: "node --test" }, { lint: "", test: "  " }]) {
+    test(`read config detects optional scripts ${JSON.stringify(scripts)} with ${packageManager}`, () => fixture(workspace => {
+      writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager, scripts }));
+      writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+        app: { directory: "app", "aws-region": "eu-north-1" },
+      }));
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace,
+        GITHUB_REPOSITORY: "owner/example-app",
+        GITHUB_OUTPUT: join(workspace, "outputs"),
+        CONFIG_PATH: "nextjs-app.yml",
+        COMMAND: "deploy",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const outputs = readFileSync(join(workspace, "outputs"), "utf8");
+      const manager = packageManager.split("@")[0];
+      assert(outputs.includes(`lint-command=${scripts.lint?.trim() ? `${manager} run lint` : ""}\n`));
+      assert(outputs.includes(`test-command=${scripts.test?.trim() ? `${manager} run test` : ""}\n`));
+    }));
+  }
+  for (const override of ["", "custom-check"]) {
+    test(`read config preserves optional command override ${JSON.stringify(override)} with ${packageManager}`, () => fixture(workspace => {
+      writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager, scripts: { lint: "eslint .", test: "node --test" } }));
+      writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+        app: { directory: "app", "aws-region": "eu-north-1", "lint-command": override, "test-command": override },
+      }));
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace,
+        GITHUB_REPOSITORY: "owner/example-app",
+        GITHUB_OUTPUT: join(workspace, "outputs"),
+        CONFIG_PATH: "nextjs-app.yml",
+        COMMAND: "deploy",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const outputs = readFileSync(join(workspace, "outputs"), "utf8");
+      assert(outputs.includes(`lint-command=${override}\n`));
+      assert(outputs.includes(`test-command=${override}\n`));
+    }));
+  }
 }
 
 test("read config preserves custom commands for Yarn", () => fixture(workspace => {
