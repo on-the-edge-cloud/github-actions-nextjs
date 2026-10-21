@@ -114,7 +114,7 @@ const outputs: Record<string, string> = {
     ? `yarn install --${modernYarn ? "immutable" : "frozen-lockfile"}` : "npm ci"),
   "lint-command": config.app["lint-command"] ?? scriptCommand("lint"),
   "test-command": config.app["test-command"] ?? scriptCommand("test"),
-  "build-command": config.app["build-command"] ?? "",
+  "build-command": config.app["build-command"] ?? (deploymentType === "static" ? `${packageManager} run build` : ""),
   "opennext-build-command": config.app["opennext-build-command"] ?? "",
   "smoke-test-command": config.app["smoke-test-command"] ?? "",
   "aws-region": region,

@@ -61,6 +61,18 @@ The smoke test step runs after CloudFront invalidation. It does nothing by defau
 
 OpenNext is provided by the platform: clients do not need an OpenNext dependency, config, or build script. The managed build requires a stable Next.js version `>=16.4.1`, matching the current OpenNext compatibility range for Next.js 16. The action checks the installed version and fails before building if it is missing or too old. To customize OpenNext, install `@opennextjs/aws` in the app and add `open-next.config.ts`; the action uses the client's package and config. Set `app.opennext-build-command` to replace the managed build command; the Next.js version requirement still applies.
 
+## Static exports
+
+For applications using `output: "export"` in their Next.js configuration, select the static deployment explicitly:
+
+```yaml
+app:
+  aws-region: "eu-north-1"
+  deployment-type: "static"
+```
+
+Static deployments run the application's `build` script with npm or Yarn and deploy the exported `out/` directory without running OpenNext. Keep `output: "export"` in the Next.js configuration. Set `app.build-command` to replace the static build command; an explicit empty string skips that build. The default deployment type remains `ssr`, which requires a standalone build rather than a static export.
+
 ## Terraform state
 
 State is isolated by repository, hosting mode, and PR or production. The AWS role needs access to the S3 state and lock files. Existing infrastructure requires state migration before deploy or destroy; migration is not automatic. Back up the old state, reconcile resource addresses with the new module, and review the plan before applying.

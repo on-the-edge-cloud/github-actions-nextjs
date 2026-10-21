@@ -107,6 +107,7 @@ jobs:
           command: ${{ steps.config.outputs.build-command }}
 
       - name: Build OpenNext
+        if: steps.config.outputs.deployment-type == 'ssr'
         uses: ./.platform/actions/build-opennext
         with:
           working-directory: ${{ steps.config.outputs.app-directory }}

@@ -29,8 +29,12 @@ test("workflow callers match local action inputs and outputs", () => {
     assert(steps.indexOf(corepack) < steps.indexOf(node));
     const build = steps.find((step: { name: string }) => step.name === "Build OpenNext");
     assert.equal(build.uses, "./.platform/actions/build-opennext");
+    assert.equal(build.if, `${kind === "preview" ? "inputs.command == 'deploy' && " : ""}steps.config.outputs.deployment-type == 'ssr'`);
     assert.equal(build.with.command, "${{ steps.config.outputs.opennext-build-command }}");
     assert.equal(build.with["working-directory"], "${{ steps.config.outputs.app-directory }}");
+    const nextBuild = steps.find((step: { name: string }) => step.name === "Build Next.js");
+    assert.equal(nextBuild.if, `${kind === "preview" ? "inputs.command == 'deploy' && " : ""}steps.config.outputs.build-command != ''`);
+    assert.equal(nextBuild.with.command, "${{ steps.config.outputs.build-command }}");
     const smoke = steps.find((step: { uses?: string }) => step.uses === "./.platform/actions/smoke-test");
     assert(smoke, `${kind} must run the platform smoke test`);
     assert.equal(smoke.with.url, `\${{ steps.${kind}.outputs.url }}`);

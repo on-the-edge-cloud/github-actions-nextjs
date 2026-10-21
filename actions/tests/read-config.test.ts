@@ -117,6 +117,28 @@ for (const packageManager of ["npm@10.9.9", "yarn@4.4.1"]) {
   }
 }
 
+for (const packageManager of ["npm@10.9.9", "yarn@4.4.1"]) {
+  for (const buildCommand of [undefined, "", "custom-build"]) {
+    test(`read config static build with ${packageManager} and override ${JSON.stringify(buildCommand)}`, () => fixture(workspace => {
+      writeFileSync(join(workspace, "app/package.json"), JSON.stringify({ packageManager, scripts: { build: "next build" } }));
+      writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
+        app: { directory: "app", "aws-region": "eu-north-1", "deployment-type": "static", "build-command": buildCommand },
+      }));
+      const result = execute("read-config", {
+        GITHUB_WORKSPACE: workspace,
+        GITHUB_REPOSITORY: "owner/example-app",
+        GITHUB_OUTPUT: join(workspace, "outputs"),
+        CONFIG_PATH: "nextjs-app.yml",
+        COMMAND: "deploy",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const outputs = readFileSync(join(workspace, "outputs"), "utf8");
+      assert(outputs.includes("deployment-type=static\n"));
+      assert(outputs.includes(`\nbuild-command=${buildCommand ?? `${packageManager.split("@")[0]} run build`}\n`));
+    }));
+  }
+}
+
 test("read config preserves custom commands for Yarn", () => fixture(workspace => {
   writeFileSync(join(workspace, "yarn.lock"), "");
   writeFileSync(join(workspace, "nextjs-app.yml"), stringify({
